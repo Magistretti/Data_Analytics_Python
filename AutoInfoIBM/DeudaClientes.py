@@ -7,9 +7,13 @@ import pyodbc
 server = "192.168.200.33,50020\cloud"
 database = "Rumaos"
 username = "gpedro" 
-password = "s3rv1d0r" 
-cnxn = pyodbc.connect("DRIVER={ODBC Driver 17 for SQL Server};\
-    SERVER="+server+";DATABASE="+database+";UID="+username+";PWD="+ password)
+password = "s3rv1d0"
+try:
+    cnxn = pyodbc.connect("DRIVER={ODBC Driver 17 for SQL Server};\
+        SERVER="+server+";DATABASE="+database+";UID="+username+";PWD="+ password)
+except Exception as e:
+    print("Ocurrió un error al conectar a SQL Server: ", e)
+
 cursor = cnxn.cursor()
 
 #Sample Query
