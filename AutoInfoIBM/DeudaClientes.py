@@ -2,6 +2,7 @@ import pandas as pd
 import pyodbc
 
 # The "login" variable is a list that holds the connection data to the SQL Server
+
 from DatosLogin import login
 
 server = login[0]
