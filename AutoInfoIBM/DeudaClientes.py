@@ -68,9 +68,13 @@ df_cuentasDeudoras = pd.read_sql("""
 df_cuentasDeudoras.head(5)
 
 df_condicionCliente = pd.read_excel("C:/Users/gpedro/OneDrive - RedMercosur/"
-    "Consultas Power BI/TABLERO SGES VS SGFIN/Clientes condicion especial.xlsx",
+    "Consultas Power BI/TABLERO SGES VS SGFIN/"
+    "Clientes condicion especial.xlsx",
     usecols="B,C,I")
 
 df_condicionCliente.dropna(subset=["Condición del cliente"], inplace=True)
 
 print(df_condicionCliente)
+
+df_cuentasDeudoras = df_cuentasDeudoras.merge(right=df_condicionCliente,
+    how="left")
