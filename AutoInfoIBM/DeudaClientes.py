@@ -25,7 +25,7 @@ except Exception as e:
 cursor = db_conex.cursor()
 
 ############
-#Sample Query
+#   Sample Query
 # cursor.execute("SELECT * FROM [Rumaos].[dbo].[Mail]")
 # row = cursor.fetchone()
 # while row:
@@ -35,6 +35,21 @@ cursor = db_conex.cursor()
 # df_mail = pd.read_sql("SELECT * FROM [Rumaos].[dbo].[Mail]",db_conex)
 # print(df_mail)
 ############
+
+#########
+# Convert dbo.Faccli SQL table to a Dataframe
+#
+# At this point we will make a SQL query with the required data of the "Faccli"
+# table merged to the "Vendedores" table and turn that to a dataframe
+# with Pandas.
+# 
+# Requirements:
+# -Filter unused columns
+# -Show name of vendor instead of number
+# -Use "ListaSaldoCC = 1" filter to avoid old or frozen accounts
+# -Use a filter by total debt (SALDOPREPAGO - SALDOREMIPENDFACTU) 
+#   to get only debt below -100
+######### 
 
 df_cuentasDeudoras = pd.read_sql("""
     SELECT 
@@ -65,16 +80,42 @@ df_cuentasDeudoras = pd.read_sql("""
         and FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU < -100;
 """, db_conex)
 
-df_cuentasDeudoras.head(5)
+# Casting column [NROCLIPRO] to string
 
-df_condicionCliente = pd.read_excel("C:/Users/gpedro/OneDrive - RedMercosur/"
-    "Consultas Power BI/TABLERO SGES VS SGFIN/"
-    "Clientes condicion especial.xlsx",
-    usecols="B,C,I")
+df_cuentasDeudoras["NROCLIPRO"] = \
+    df_cuentasDeudoras["NROCLIPRO"].astype("int64")
+df_cuentasDeudoras["NROCLIPRO"] = \
+    df_cuentasDeudoras["NROCLIPRO"].astype("string")
 
-df_condicionCliente.dropna(subset=["Condición del cliente"], inplace=True)
+#df_cuentasDeudoras.head(5)
 
-print(df_condicionCliente)
+#########
+# Table "Clientes condicion especial.xlsx" not needed anymore
+    #
+    # Convert Excel file "Clientes condicion especial.xlsx" to a Dataframe
+    #
+    # Requirements:
+    # -Filter unused columns
+    # -Drop rows with NaNs in "Condición del cliente" column
+    #########
 
-df_cuentasDeudoras = df_cuentasDeudoras.merge(right=df_condicionCliente,
-    how="left")
+    # df_condicionCliente = pd.read_excel("C:/Users/gpedro/OneDrive - RedMercosur/"
+    #     "Consultas Power BI/TABLERO SGES VS SGFIN/"
+    #     "Clientes condicion especial.xlsx",
+    #     usecols="B,I")
+
+    # df_condicionCliente["NROCLIPRO"] = \
+    #     df_condicionCliente["NROCLIPRO"].astype("string")
+
+    # df_condicionCliente.dropna(subset=["Condición del cliente"], inplace=True)
+
+    #print(df_condicionCliente)
+
+    #########
+    # Left Outer Merge of df_cuentasDeudoras with df_condicionCliente to add 
+    # "Condición del cliente" column to df_cuentasDeudoras
+    #########
+
+    # df_cuentasDeudoras = df_cuentasDeudoras.merge(right=df_condicionCliente,
+    #     how="left", on="NROCLIPRO")
+    # df_cuentasDeudoras.info()
