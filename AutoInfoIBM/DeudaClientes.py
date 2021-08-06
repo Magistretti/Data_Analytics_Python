@@ -16,8 +16,13 @@ password = login[3]
 # Try connecting to the SQL Server, will report error and stop if failed
 
 try:
-    db_conex = pyodbc.connect("DRIVER={ODBC Driver 17 for SQL Server};\
-        SERVER="+server+";DATABASE="+database+";UID="+username+";PWD="+ password)
+    db_conex = pyodbc.connect(
+        "DRIVER={ODBC Driver 17 for SQL Server};\
+        SERVER="+server+";\
+        DATABASE="+database+";\
+        UID="+username+";\
+        PWD="+ password
+    )
 except Exception as e:
     print("Ocurrió un error al conectar a SQL Server: ", e)
     exit()
@@ -89,6 +94,49 @@ df_cuentasDeudoras["NROCLIPRO"] = \
 
 #df_cuentasDeudoras.head(5)
 
+#########
+# Convert dbo.FacRemDet SQL table to a Dataframe
+#
+# Requirements:
+# -Filter unused columns
+# -Show name of vendor instead of number
+# -Use "ListaSaldoCC = 1" filter to avoid old or frozen accounts
+# -Use a filter by total debt (SALDOPREPAGO - SALDOREMIPENDFACTU) 
+#   to get only debt below -100
+######### 
+
+df_remitos = pd.read_sql("""
+    SELECT 
+        [UEN]
+        ,[FECHASQL]
+        ,[TURNO]
+        ,[PTOVTA]
+        ,cast([NROREMITO] AS VARCHAR) as NROREMITO
+        ,[NROCLIENTE]
+        ,[CODPRODUCTO]
+        ,[CANTIDAD]
+        ,[PXUNINETO]
+        ,[IMPINT]
+        ,[IMPIVA]
+        ,[PXUNITARIO]
+        ,[IMPORTE]
+    FROM [Rumaos].[dbo].[FacRemDet]
+    where FECHASQL >= '20210601'
+""", db_conex)
+
+def new_func(df,col):
+    df[col] = \
+        df[col].astype("int64")
+    df[col] = \
+        df[col].astype("string")
+
+new_func(df_remitos,"NROCLIENTE")
+
+#df_remitos.head(5)
+df_remitos.info()
+df_remitos = df_remitos.convert_dtypes()
+print("////////////////")
+df_remitos.info()
 #########
 # Table "Clientes condicion especial.xlsx" not needed anymore
     #
