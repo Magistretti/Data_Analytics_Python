@@ -42,6 +42,38 @@ cursor = db_conex.cursor()
 ############
 
 #########
+# Table "Clientes condicion especial.xlsx" not needed anymore
+    #
+    # Convert Excel file "Clientes condicion especial.xlsx" to a Dataframe
+    #
+    # Requirements:
+    # -Filter unused columns
+    # -Drop rows with NaNs in "Condición del cliente" column
+    #########
+
+    # df_condicionCliente = pd.read_excel("C:/Users/gpedro/OneDrive - RedMercosur/"
+    #     "Consultas Power BI/TABLERO SGES VS SGFIN/"
+    #     "Clientes condicion especial.xlsx",
+    #     usecols="B,I")
+
+    # df_condicionCliente["NROCLIPRO"] = \
+    #     df_condicionCliente["NROCLIPRO"].astype("string")
+
+    # df_condicionCliente.dropna(subset=["Condición del cliente"], inplace=True)
+
+    #print(df_condicionCliente)
+
+    #########
+    # Left Outer Merge of df_cuentasDeudoras with df_condicionCliente to add 
+    # "Condición del cliente" column to df_cuentasDeudoras
+    #########
+
+    # df_cuentasDeudoras = df_cuentasDeudoras.merge(right=df_condicionCliente,
+    #     how="left", on="NROCLIPRO")
+    # df_cuentasDeudoras.info()
+
+
+#########
 # Convert dbo.Faccli SQL table to a Dataframe
 #
 # At this point we will make a SQL query with the required data of the "Faccli"
@@ -58,8 +90,7 @@ cursor = db_conex.cursor()
 
 df_cuentasDeudoras = pd.read_sql("""
     SELECT 
-        FacCli.[ID] 
-        ,FacCli.[NROCLIPRO]
+        FacCli.[NROCLIPRO]
         ,FacCli.[NOMBRE]
         ,FacCli.[DOMICILIO]
         ,FacCli.[LOCALIDAD]
@@ -92,78 +123,58 @@ df_cuentasDeudoras["NROCLIPRO"] = \
 df_cuentasDeudoras["NROCLIPRO"] = \
     df_cuentasDeudoras["NROCLIPRO"].astype("string")
 
-#df_cuentasDeudoras.head(5)
+#print(df_cuentasDeudoras.head(5))
 
 #########
 # Convert dbo.FacRemDet SQL table to a Dataframe
 #
 # Requirements:
 # -Filter unused columns
-# -Show name of vendor instead of number
-# -Use "ListaSaldoCC = 1" filter to avoid old or frozen accounts
-# -Use a filter by total debt (SALDOPREPAGO - SALDOREMIPENDFACTU) 
-#   to get only debt below -100
+# -Cast PTOVTA, NROREMITO and NROCLIENTE as string
+# -Filter data Previous to 2021-01-01
 ######### 
 
 df_remitos = pd.read_sql("""
     SELECT 
-        [UEN]
-        ,[FECHASQL]
-        ,[TURNO]
-        ,[PTOVTA]
-        ,cast([NROREMITO] AS VARCHAR) as NROREMITO
-        ,[NROCLIENTE]
-        ,[CODPRODUCTO]
-        ,[CANTIDAD]
-        ,[PXUNINETO]
-        ,[IMPINT]
-        ,[IMPIVA]
-        ,[PXUNITARIO]
-        ,[IMPORTE]
+        FacRemDet.[UEN]
+        ,FacRemDet.[FECHASQL]
+        ,FacRemDet.[TURNO]
+        ,cast(FacRemDet.[PTOVTA] AS VARCHAR) as PTOVTA
+        ,cast(FacRemDet.[NROREMITO] AS VARCHAR) as NROREMITO
+        ,cast(FacRemDet.[NROCLIENTE] AS VARCHAR) as NROCLIENTE
+        ,FacCli.[NOMBRE]
+        ,FacRemDet.[CODPRODUCTO]
+        ,FacRemDet.[CANTIDAD]
+        ,FacRemDet.[PXUNINETO]
+        ,FacRemDet.[IMPINT]
+        ,FacRemDet.[IMPIVA]
+        ,FacRemDet.[PXUNITARIO]
+        ,FacRemDet.[IMPORTE]
     FROM [Rumaos].[dbo].[FacRemDet]
+    Left Outer Join FacCli on FacRemDet.NROCLIENTE = FacCli.NROCLIPRO
     where FECHASQL >= '20210601'
 """, db_conex)
 
-def new_func(df,col):
-    df[col] = \
-        df[col].astype("int64")
-    df[col] = \
-        df[col].astype("string")
+#print(df_remitos.head(5))
 
-new_func(df_remitos,"NROCLIENTE")
-
-#df_remitos.head(5)
-df_remitos.info()
 df_remitos = df_remitos.convert_dtypes()
-print("////////////////")
-df_remitos.info()
-#########
-# Table "Clientes condicion especial.xlsx" not needed anymore
-    #
-    # Convert Excel file "Clientes condicion especial.xlsx" to a Dataframe
-    #
-    # Requirements:
-    # -Filter unused columns
-    # -Drop rows with NaNs in "Condición del cliente" column
-    #########
 
-    # df_condicionCliente = pd.read_excel("C:/Users/gpedro/OneDrive - RedMercosur/"
-    #     "Consultas Power BI/TABLERO SGES VS SGFIN/"
-    #     "Clientes condicion especial.xlsx",
-    #     usecols="B,I")
+#df_remitos.info()
 
-    # df_condicionCliente["NROCLIPRO"] = \
-    #     df_condicionCliente["NROCLIPRO"].astype("string")
+df_primerRemitoPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","FECHASQL"]]\
+    .groupby(["NROCLIENTE","NOMBRE"]).min()
 
-    # df_condicionCliente.dropna(subset=["Condición del cliente"], inplace=True)
+print(df_primerRemitoPorCuenta.head(5))
 
-    #print(df_condicionCliente)
+df_ultimoRemitoPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","FECHASQL"]]\
+    .groupby(["NROCLIENTE","NOMBRE"]).max()
 
-    #########
-    # Left Outer Merge of df_cuentasDeudoras with df_condicionCliente to add 
-    # "Condición del cliente" column to df_cuentasDeudoras
-    #########
+print(df_ultimoRemitoPorCuenta.head(5))
 
-    # df_cuentasDeudoras = df_cuentasDeudoras.merge(right=df_condicionCliente,
-    #     how="left", on="NROCLIPRO")
-    # df_cuentasDeudoras.info()
+# df_remitos[df_remitos["FECHASQL"]==max(df_remitos["FECHASQL"])]
+# print(primerRemito)
+
+df_ventaPesos = df_remitos[["NROCLIENTE","NOMBRE","IMPORTE"]]\
+    .groupby(["NROCLIENTE","NOMBRE"]).sum()
+
+print(df_ventaPesos.head(5))
