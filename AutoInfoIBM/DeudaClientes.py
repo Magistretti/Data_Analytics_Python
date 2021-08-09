@@ -103,7 +103,7 @@ df_cuentasDeudoras = pd.read_sql("""
         ,FacCli.[FEULTVTASQL]
         ,FacCli.[SALDOPREPAGO]
         ,FacCli.[SALDOREMIPENDFACTU]
-        ,FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU as SALDOTOTAL
+        ,FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU as SALDOCUENTA
         ,FacCli.[TARJETA]
         ,FacCli.[TIPOCOMPCC]
         ,FacCli.[BLOQUEADO]
@@ -150,9 +150,13 @@ df_remitos = pd.read_sql("""
         ,FacRemDet.[IMPIVA]
         ,FacRemDet.[PXUNITARIO]
         ,FacRemDet.[IMPORTE]
+        ,FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU as SALDOCUENTA
+        ,FacCli.[ListaSaldoCC]
     FROM [Rumaos].[dbo].[FacRemDet]
     Left Outer Join FacCli on FacRemDet.NROCLIENTE = FacCli.NROCLIPRO
     where FECHASQL >= '20210601'
+        and ListaSaldoCC = 1
+        and FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU < -100
 """, db_conex)
 
 #print(df_remitos.head(5))
@@ -164,12 +168,12 @@ df_remitos = df_remitos.convert_dtypes()
 df_primerRemitoPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","FECHASQL"]]\
     .groupby(["NROCLIENTE","NOMBRE"]).min()
 
-print(df_primerRemitoPorCuenta.head(5))
+#print(df_primerRemitoPorCuenta.head(5))
 
 df_ultimoRemitoPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","FECHASQL"]]\
     .groupby(["NROCLIENTE","NOMBRE"]).max()
 
-print(df_ultimoRemitoPorCuenta.head(5))
+#print(df_ultimoRemitoPorCuenta.head(5))
 
 # df_remitos[df_remitos["FECHASQL"]==max(df_remitos["FECHASQL"])]
 # print(primerRemito)
@@ -177,4 +181,12 @@ print(df_ultimoRemitoPorCuenta.head(5))
 df_ventaPesos = df_remitos[["NROCLIENTE","NOMBRE","IMPORTE"]]\
     .groupby(["NROCLIENTE","NOMBRE"]).sum()
 
-print(df_ventaPesos.head(5))
+#print(df_ventaPesos.head(5))
+
+mezcla = pd.merge(df_primerRemitoPorCuenta,df_ultimoRemitoPorCuenta, on=["NROCLIENTE","NOMBRE"])
+#print(mezcla.head(5))
+#mezcla.info()
+mezcla_2 = pd.merge(mezcla, df_ventaPesos, on=["NROCLIENTE","NOMBRE"])
+print(mezcla_2.head(5))
+#mezcla_2.info()
+mezcla_2["FECHASQL_y"]-mezcla_2["FECHASQL_x"]
