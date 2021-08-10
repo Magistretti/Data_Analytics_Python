@@ -167,31 +167,44 @@ df_remitos = df_remitos.convert_dtypes()
 #df_remitos.info()
 
 #######
-# Get the first date, last date and the sum of IMPORTE of every client in 
-# df_remitos
+# -Get the first date, last date and the sum of IMPORTE of each client in 
+#   df_remitos,
+# -Also get the sum of IMPORTE of the last 7 days for each client
 #######
 
 df_primerRemitoPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","FECHASQL"]]\
     .groupby(["NROCLIENTE","NOMBRE"]).min()
 
-#print(df_primerRemitoPorCuenta.head(5))
+#print(df_primerRemitoPorCuenta.head())
 
 df_ultimoRemitoPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","FECHASQL"]]\
     .groupby(["NROCLIENTE","NOMBRE"]).max()
 
-#print(df_ultimoRemitoPorCuenta.head(5))
+#print(df_ultimoRemitoPorCuenta.head())
 
-# df_remitos[df_remitos["FECHASQL"]==max(df_remitos["FECHASQL"])]
-# print(primerRemito)
-
-df_ventaPesos = df_remitos[["NROCLIENTE","NOMBRE","IMPORTE"]]\
+df_ventaPesosPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","IMPORTE"]]\
     .groupby(["NROCLIENTE","NOMBRE"]).sum()
 
-#print(df_ventaPesos.head(5))
+#print(df_ventaPesosPorCuenta.head())
+
+fechaHoy = pd.to_datetime("today").normalize()
+
+fechaSemanaAtras = fechaHoy - pd.to_timedelta(7, unit="days")
+
+df_remitos7Dias = df_remitos[(df_remitos["FECHASQL"] >= 
+    fechaSemanaAtras) & (df_remitos["FECHASQL"] < fechaHoy)]
+
+#print(df_remitos7Dias.head())
+
+df_VentaSemanalPorCuenta = df_remitos7Dias[["NROCLIENTE","NOMBRE","IMPORTE"]]\
+    .groupby(["NROCLIENTE","NOMBRE"]).sum()
+
+#print(df_VentaSemanalPorCuenta.head())
 
 ########
-# Merging df_primerRemitoPorCuenta, df_ultimoRemitoPorCuenta and df_ventaPesos
-# into a new dataframe, df_remitosVentasPorCliente
+# Merging df_primerRemitoPorCuenta, df_ultimoRemitoPorCuenta and 
+# df_ventaPesosPorCuenta and df_VentaSemanalPorCuenta into a new
+# dataframe, df_remitosVentasPorCliente
 ########
 
 df_remitosVentasPorCliente = pd.merge(
@@ -203,30 +216,44 @@ df_remitosVentasPorCliente = pd.merge(
 
 df_remitosVentasPorCliente = pd.merge(
     df_remitosVentasPorCliente,
-    df_ventaPesos,
+    df_ventaPesosPorCuenta,
     on=["NROCLIENTE","NOMBRE"]
 )
 
+df_remitosVentasPorCliente = pd.merge(
+    df_remitosVentasPorCliente,
+    df_VentaSemanalPorCuenta,
+    on=["NROCLIENTE","NOMBRE"],
+    suffixes=("","_Semanal")
+)
+
 #######
-# Creating columns "Dias Entre 1er y Ultimo Remito" and "Venta $ Prom Diaria" 
+# Creating columns: 
+#   -"Dias Entre 1er y Ultimo Remito" 
+#   -"Venta $ Prom Diaria"
+#   -"Venta $ Prom Ult 7 Dias" 
 # in df_remitosVentasPorCliente
 #######
 
 df_remitosVentasPorCliente["Dias Entre 1er y Ultimo Remito"] = \
     df_remitosVentasPorCliente.apply(
-        lambda row: \
-            (row["FECHASQL_UltimoRemito"]-row["FECHASQL_PrimerRemito"])
-                if (row["FECHASQL_UltimoRemito"]-row["FECHASQL_PrimerRemito"]) >
-                    pd.to_timedelta(0, unit="days") #Compare timedelta > 0
-                else pd.to_timedelta(1, unit="days") #To avoid divide by 0
+        lambda row: (row["FECHASQL_UltimoRemito"]-row["FECHASQL_PrimerRemito"])
+            if (row["FECHASQL_UltimoRemito"]-row["FECHASQL_PrimerRemito"]) >
+                pd.to_timedelta(0, unit="days") #Compare timedelta > 0
+            else pd.to_timedelta(1, unit="days") #To avoid divide by 0
         , axis= 1 #This will apply the lambda function per row
     ).dt.days
 
 df_remitosVentasPorCliente["Venta $ Prom Diaria"] = \
     df_remitosVentasPorCliente.apply(
-        lambda row: row["IMPORTE"] /
-        (row["Dias Entre 1er y Ultimo Remito"])
+        lambda row: row["IMPORTE"] / row["Dias Entre 1er y Ultimo Remito"]
         , axis= 1
     )
 
-print(df_remitosVentasPorCliente.head(5))
+df_remitosVentasPorCliente["Venta $ Prom Ult 7 Dias"] = \
+    df_remitosVentasPorCliente.apply(
+        lambda row: row["IMPORTE_Semanal"] / 7
+        , axis= 1
+    )
+
+print(df_remitosVentasPorCliente.head())
