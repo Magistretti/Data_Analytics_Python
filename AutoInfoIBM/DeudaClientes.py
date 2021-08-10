@@ -166,6 +166,11 @@ df_remitos = df_remitos.convert_dtypes()
 
 #df_remitos.info()
 
+#######
+# Get the first date, last date and the sum of IMPORTE of every client in 
+# df_remitos
+#######
+
 df_primerRemitoPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","FECHASQL"]]\
     .groupby(["NROCLIENTE","NOMBRE"]).min()
 
@@ -184,6 +189,11 @@ df_ventaPesos = df_remitos[["NROCLIENTE","NOMBRE","IMPORTE"]]\
 
 #print(df_ventaPesos.head(5))
 
+########
+# Merging df_primerRemitoPorCuenta, df_ultimoRemitoPorCuenta and df_ventaPesos
+# into a new dataframe, df_remitosVentasPorCliente
+########
+
 df_remitosVentasPorCliente = pd.merge(
     df_primerRemitoPorCuenta,
     df_ultimoRemitoPorCuenta,
@@ -197,13 +207,26 @@ df_remitosVentasPorCliente = pd.merge(
     on=["NROCLIENTE","NOMBRE"]
 )
 
-# df_remitosVentasPorCliente["Venta $ Prom Diaria"] = \
-#     df_remitosVentasPorCliente.apply(
-#         lambda row: row["IMPORTE"] /1000
-#         #(row["FECHASQL_UltimoRemito"]-row["FECHASQL_PrimerRemito"])
-#         , axis=1
-#     )
-# print(df_remitosVentasPorCliente.head(5))
+#######
+# Creating columns "Dias Entre 1er y Ultimo Remito" and "Venta $ Prom Diaria" 
+# in df_remitosVentasPorCliente
+#######
 
-(df_remitosVentasPorCliente["FECHASQL_UltimoRemito"]-\
-df_remitosVentasPorCliente["FECHASQL_PrimerRemito"]).dt.days
+df_remitosVentasPorCliente["Dias Entre 1er y Ultimo Remito"] = \
+    df_remitosVentasPorCliente.apply(
+        lambda row: \
+            (row["FECHASQL_UltimoRemito"]-row["FECHASQL_PrimerRemito"])
+                if (row["FECHASQL_UltimoRemito"]-row["FECHASQL_PrimerRemito"]) >
+                    pd.to_timedelta(0, unit="days") #Compare timedelta > 0
+                else pd.to_timedelta(1, unit="days") #To avoid divide by 0
+        , axis= 1 #This will apply the lambda function per row
+    ).dt.days
+
+df_remitosVentasPorCliente["Venta $ Prom Diaria"] = \
+    df_remitosVentasPorCliente.apply(
+        lambda row: row["IMPORTE"] /
+        (row["Dias Entre 1er y Ultimo Remito"])
+        , axis= 1
+    )
+
+print(df_remitosVentasPorCliente.head(5))
