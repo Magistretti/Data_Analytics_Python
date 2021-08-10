@@ -1,4 +1,5 @@
 import pandas as pd
+import datetime as dt
 
 # We are connecting to a Microsoft SQL Server so we can use pyodbc library
 
@@ -183,10 +184,26 @@ df_ventaPesos = df_remitos[["NROCLIENTE","NOMBRE","IMPORTE"]]\
 
 #print(df_ventaPesos.head(5))
 
-mezcla = pd.merge(df_primerRemitoPorCuenta,df_ultimoRemitoPorCuenta, on=["NROCLIENTE","NOMBRE"])
-#print(mezcla.head(5))
-#mezcla.info()
-mezcla_2 = pd.merge(mezcla, df_ventaPesos, on=["NROCLIENTE","NOMBRE"])
-print(mezcla_2.head(5))
-#mezcla_2.info()
-mezcla_2["FECHASQL_y"]-mezcla_2["FECHASQL_x"]
+df_remitosVentasPorCliente = pd.merge(
+    df_primerRemitoPorCuenta,
+    df_ultimoRemitoPorCuenta,
+    on=["NROCLIENTE","NOMBRE"],
+    suffixes=("_PrimerRemito","_UltimoRemito")
+)
+
+df_remitosVentasPorCliente = pd.merge(
+    df_remitosVentasPorCliente,
+    df_ventaPesos,
+    on=["NROCLIENTE","NOMBRE"]
+)
+
+# df_remitosVentasPorCliente["Venta $ Prom Diaria"] = \
+#     df_remitosVentasPorCliente.apply(
+#         lambda row: row["IMPORTE"] /1000
+#         #(row["FECHASQL_UltimoRemito"]-row["FECHASQL_PrimerRemito"])
+#         , axis=1
+#     )
+# print(df_remitosVentasPorCliente.head(5))
+
+(df_remitosVentasPorCliente["FECHASQL_UltimoRemito"]-\
+df_remitosVentasPorCliente["FECHASQL_PrimerRemito"]).dt.days
