@@ -1,12 +1,16 @@
 import pandas as pd
 import datetime as dt
 
-# We are connecting to a Microsoft SQL Server so we can use pyodbc library
+def biggestOf2(a,b):
+    if a > b:
+        return a
+    else:
+        return b
 
+# We are connecting to a Microsoft SQL Server so we can use pyodbc library
 import pyodbc
 
 from DatosLogin import login
-
 # "login" is a list that holds the connection data to the SQL Server
 
 server = login[0]
@@ -91,7 +95,7 @@ cursor = db_conex.cursor()
 
 df_cuentasDeudoras = pd.read_sql("""
     SELECT 
-        FacCli.[NROCLIPRO]
+        CAST(FacCli.[NROCLIPRO] AS VARCHAR) as NROCLIENTE
         ,FacCli.[NOMBRE]
         ,FacCli.[DOMICILIO]
         ,FacCli.[LOCALIDAD]
@@ -100,14 +104,14 @@ df_cuentasDeudoras = pd.read_sql("""
         ,FacCli.[EMAIL]
         ,FacCli.[TIPOIVA]
         ,FacCli.[CUITDOC]
-        ,FacCli.[CODFORPAGO]
+        ,CAST(FacCli.[CODFORPAGO] AS VARCHAR) as CODFORPAGO
         ,FacCli.[FEULTVTASQL]
         ,FacCli.[SALDOPREPAGO]
         ,FacCli.[SALDOREMIPENDFACTU]
         ,FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU as SALDOCUENTA
         ,FacCli.[TARJETA]
         ,FacCli.[TIPOCOMPCC]
-        ,FacCli.[BLOQUEADO]
+        ,CAST(FacCli.[BLOQUEADO] AS VARCHAR) as BLOQUEADO
         ,FacCli.[LIMITECREDITO]
         ,Vendedores.[NOMBREVEND]
         ,FacCli.[ListaSaldoCC]
@@ -117,13 +121,9 @@ df_cuentasDeudoras = pd.read_sql("""
         and FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU < -100;
 """, db_conex)
 
-# Casting column [NROCLIPRO] to string
+df_cuentasDeudoras = df_cuentasDeudoras.convert_dtypes()
 
-df_cuentasDeudoras["NROCLIPRO"] = \
-    df_cuentasDeudoras["NROCLIPRO"].astype("int64")
-df_cuentasDeudoras["NROCLIPRO"] = \
-    df_cuentasDeudoras["NROCLIPRO"].astype("string")
-
+#print(df_cuentasDeudoras.info())
 #print(df_cuentasDeudoras.head(5))
 
 #########
@@ -256,4 +256,32 @@ df_remitosVentasPorCliente["Venta $ Prom Ult 7 Dias"] = \
         , axis= 1
     )
 
-print(df_remitosVentasPorCliente.head())
+#print(df_remitosVentasPorCliente.head())
+
+#############
+# -Merge df_remitosVentasPorCliente with df_cuentasDeudoras to get 
+# the "SALDOCUENTA" column
+# -Create column "Dias Venta Adeud" = SALDOCUENTA/"Mayor Vta $ Prom Diaria"
+# -"Mayor Vta $ Prom Diaria" is the biggest of "Venta $ Prom Diaria" and
+#   "Venta $ Prom Ult 7 Dias"
+# -Create column "Cond Deuda Cliente" = IF("Dias Venta Adeud" < 20, "Normal",
+#   IF("Dias Venta Adeud" < 30, "Moroso","Excedido"))
+#############
+
+df_remitosVentasPorCliente = pd.merge(
+    df_remitosVentasPorCliente,
+    df_cuentasDeudoras[["NROCLIENTE","NOMBRE","SALDOCUENTA"]],
+    on=["NROCLIENTE","NOMBRE"]
+)
+
+df_remitosVentasPorCliente["Dias Venta Adeud"] = \
+    df_remitosVentasPorCliente.apply(
+        lambda row: round(row["SALDOCUENTA"] * (-1) / 
+            biggestOf2(
+                row["Venta $ Prom Diaria"],
+                row["Venta $ Prom Ult 7 Dias"]
+            )
+        )
+        , axis= 1
+    )
+print(df_remitosVentasPorCliente["Dias Venta Adeud"].head())
