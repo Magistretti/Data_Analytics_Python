@@ -284,4 +284,24 @@ df_remitosVentasPorCliente["Dias Venta Adeud"] = \
         )
         , axis= 1
     )
-print(df_remitosVentasPorCliente["Dias Venta Adeud"].head())
+
+# print(df_remitosVentasPorCliente["Dias Venta Adeud"].head())
+
+def condDeuda(diasAdeudados):
+    if diasAdeudados < 20:
+        return "Normal"
+    elif diasAdeudados < 30:
+        return "Moroso"
+    else:
+        return "Excedido"
+
+df_remitosVentasPorCliente["Cond Deuda Cliente"] = \
+    df_remitosVentasPorCliente.apply(
+        lambda row: condDeuda(row["Dias Venta Adeud"])
+        , axis= 1
+    )
+
+print(df_remitosVentasPorCliente[
+    ["NOMBRE","Dias Venta Adeud","Cond Deuda Cliente"]]
+    .head()
+)
