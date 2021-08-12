@@ -1,6 +1,8 @@
 import pandas as pd
-import datetime as dt
+#import datetime as dt
 import dataframe_image as dfi
+
+tiempoInicio = pd.to_datetime("today")
 
 def biggestOf2(a,b):
     if a > b:
@@ -156,7 +158,7 @@ df_remitos = pd.read_sql("""
         ,FacCli.[ListaSaldoCC]
     FROM [Rumaos].[dbo].[FacRemDet]
     Left Outer Join FacCli on FacRemDet.NROCLIENTE = FacCli.NROCLIPRO
-    where FECHASQL >= '20210601'
+    where FECHASQL >= '20210101'
         and ListaSaldoCC = 1
         and FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU < -100
 """, db_conex)
@@ -315,3 +317,46 @@ df_condicionCuentasRetrasadas.sort_values(by=["SALDOCUENTA"])
 #print(df_condicionCuentasRetrasadas.head())
 
 #dfi.export(df_condicionCuentasRetrasadas, "dataframe_test.png")
+
+def excedidoFondoRojo(dataframe):
+    return ["background-color: red" if valor == "Excedido" 
+        else "background-color: default" for valor in dataframe]
+
+df_conEstilo = df_condicionCuentasRetrasadas.style.apply(excedidoFondoRojo
+    ,subset=["Cond Deuda Cliente"]
+)
+
+##############
+# NOTE: to show the dataframe with the style in Jupyter Notebook you need to 
+# use display() method even when it seem to not be available. If you use 
+# print() it will return an error because is an styler object.
+##############
+
+display(df_conEstilo)
+
+dfi.export(df_conEstilo,
+    "dataframe_test_"
+    + pd.to_datetime("today").strftime("%Y-%m-%d_%H%M%S")
+    + ".png"
+)
+
+tiempoFinal = pd.to_datetime("today")
+
+print(tiempoInicio)
+print(tiempoFinal)
+print(tiempoFinal-tiempoInicio)
+
+# import pandas as pd
+# import numpy as np
+# def apply_formatting(col):
+#     if col.name == 'a':
+#         return ['background-color: red' if c > 50 else '' for c in col.values]
+#     if col.name == 'b':
+#         return ['background-color: green' if c > 10 else '' for c in col.values]
+#     if col.name == 'c':
+#         return ['background-color: blue' if c > 30 else '' for c in col.values]
+
+# data = pd.DataFrame(
+#     np.random.randint(0, 100, 30).reshape(10, 3), columns=['a', 'b', 'c'])
+
+# data.style.apply(apply_formatting)  # axis=0 by default
