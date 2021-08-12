@@ -1,5 +1,6 @@
 import pandas as pd
 import datetime as dt
+import dataframe_image as dfi
 
 def biggestOf2(a,b):
     if a > b:
@@ -301,7 +302,16 @@ df_remitosVentasPorCliente["Cond Deuda Cliente"] = \
         , axis= 1
     )
 
-print(df_remitosVentasPorCliente[
-    ["NOMBRE","Dias Venta Adeud","Cond Deuda Cliente"]]
-    .head()
-)
+df_condicionCuentas = df_remitosVentasPorCliente[
+    ["NOMBRE","SALDOCUENTA","Dias Venta Adeud","Cond Deuda Cliente"]
+]
+
+df_condicionCuentasRetrasadas = \
+    df_condicionCuentas[df_condicionCuentas["Cond Deuda Cliente"] != "Normal"]
+
+df_condicionCuentasRetrasadas = \
+df_condicionCuentasRetrasadas.sort_values(by=["SALDOCUENTA"])
+
+#print(df_condicionCuentasRetrasadas.head())
+
+#dfi.export(df_condicionCuentasRetrasadas, "dataframe_test.png")
