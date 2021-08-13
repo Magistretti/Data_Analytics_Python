@@ -1,5 +1,9 @@
 import pandas as pd
-#import datetime as dt
+#########
+# Formating display of dataframes with comma separator for numbers
+pd.options.display.float_format = "{:20,.2f}".format 
+#########
+
 import dataframe_image as dfi
 
 tiempoInicio = pd.to_datetime("today")
@@ -314,17 +318,39 @@ df_condicionCuentasRetrasadas = \
 df_condicionCuentasRetrasadas = \
 df_condicionCuentasRetrasadas.sort_values(by=["SALDOCUENTA"])
 
-#print(df_condicionCuentasRetrasadas.head())
+#######REVISAR#######
+# Esta sección ha agregado 50 seg de procesamiento y cambio en el tipo del 
+# campo "Dias Venta Adeud" 
 
-#dfi.export(df_condicionCuentasRetrasadas, "dataframe_test.png")
+
+df_condicionCuentasRetrasadas.loc["colTOTAL"]= \
+    pd.Series(df_condicionCuentasRetrasadas["SALDOCUENTA"].sum()
+        , index= ["SALDOCUENTA"]
+    )
+df_condicionCuentasRetrasadas= \
+    df_condicionCuentasRetrasadas.fillna({"NOMBRE":"TOTAL"}).fillna("")
+
+#######REVISAR#######
+
+#print(df_condicionCuentasRetrasadas)
+
+# The next function will format cells with the value "Excedido" to 
+# have a red background
 
 def excedidoFondoRojo(dataframe):
     return ["background-color: red" if valor == "Excedido" 
         else "background-color: default" for valor in dataframe]
 
-df_conEstilo = df_condicionCuentasRetrasadas.style.apply(excedidoFondoRojo
-    ,subset=["Cond Deuda Cliente"]
-)
+df_conEstilo_condCtaRetrasadas = \
+    df_condicionCuentasRetrasadas.style \
+        .format({"SALDOCUENTA": "{:20,.2f}"}) \
+        .hide_index() \
+        .set_caption("DEUDORES MOROSOS Y EXCEDIDOS") \
+        .set_table_styles([{
+            "selector": "caption",
+            "props": [("font-size", "20px")]
+        }]) \
+        .apply(excedidoFondoRojo,subset=["Cond Deuda Cliente"])
 
 ##############
 # NOTE: to show the dataframe with the style in Jupyter Notebook you need to 
@@ -332,18 +358,16 @@ df_conEstilo = df_condicionCuentasRetrasadas.style.apply(excedidoFondoRojo
 # print() it will return an error because is an styler object.
 ##############
 
-display(df_conEstilo)
+display(df_conEstilo_condCtaRetrasadas)
 
-dfi.export(df_conEstilo,
-    "dataframe_test_"
-    + pd.to_datetime("today").strftime("%Y-%m-%d_%H%M%S")
-    + ".png"
-)
+# dfi.export(df_conEstilo_condCtaRetrasadas,
+#     "dataframe_test_"
+#     + pd.to_datetime("today").strftime("%Y-%m-%d_%H%M%S")
+#     + ".png"
+# )
 
 tiempoFinal = pd.to_datetime("today")
-
-print(tiempoInicio)
-print(tiempoFinal)
+print("\nTiempo de Ejecucion Total:")
 print(tiempoFinal-tiempoInicio)
 
 # import pandas as pd
