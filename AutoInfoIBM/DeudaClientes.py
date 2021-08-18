@@ -352,13 +352,16 @@ def excedidoFondoRojo(dataframe):
 
 df_conEstilo_condCtaRetrasadas = \
     df_condicionCuentasRetrasadas.style \
-        .format({"SALDOCUENTA": "{:20,.2f}"}) \
+        .format({"SALDOCUENTA": "${0:,.0f}"}) \
         .hide_index() \
         .set_caption("DEUDORES MOROSOS Y EXCEDIDOS") \
-        .set_table_styles([{
-            "selector": "caption",
-            "props": [("font-size", "20px")]
-        }]) \
+        .set_properties(subset=["Dias Venta Adeud", "Cond Deuda Cliente"]
+            , **{"text-align": "center"}) \
+        .set_properties(border= "2px solid black") \
+        .set_table_styles([
+            {"selector": "caption", "props": [("font-size", "20px")]}
+            , {"selector": "th", "props": [("text-align", "center")]}
+        ]) \
         .apply(excedidoFondoRojo,subset=["Cond Deuda Cliente"])
 
 
