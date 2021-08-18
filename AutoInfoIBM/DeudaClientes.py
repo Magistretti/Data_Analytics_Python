@@ -17,8 +17,8 @@ def biggestOf2(a,b):
 # We are connecting to a Microsoft SQL Server so we can use pyodbc library
 import pyodbc
 
-from DatosLogin import login
 # "login" is a list that holds the connection data to the SQL Server
+from DatosLogin import login
 
 server = login[0]
 database = login[1]
@@ -26,7 +26,6 @@ username = login[2]
 password = login[3]
 
 # Try connecting to the SQL Server, will report error and stop if failed
-
 try:
     db_conex = pyodbc.connect(
         "DRIVER={ODBC Driver 17 for SQL Server};\
@@ -133,6 +132,7 @@ df_cuentasDeudoras = df_cuentasDeudoras.convert_dtypes()
 #print(df_cuentasDeudoras.info())
 #print(df_cuentasDeudoras.head(5))
 
+
 #########
 # Convert dbo.FacRemDet SQL table to a Dataframe
 #
@@ -168,16 +168,15 @@ df_remitos = pd.read_sql("""
 """, db_conex)
 
 #print(df_remitos.head(5))
-
 df_remitos = df_remitos.convert_dtypes()
-
 #df_remitos.info()
 
-#######
+
+############
 # -Get the first date, last date and the sum of IMPORTE of each client in 
 #   df_remitos,
 # -Also get the sum of IMPORTE of the last 7 days for each client
-#######
+############
 
 df_primerRemitoPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","FECHASQL"]]\
     .groupby(["NROCLIENTE","NOMBRE"]).min()
@@ -208,11 +207,12 @@ df_VentaSemanalPorCuenta = df_remitos7Dias[["NROCLIENTE","NOMBRE","IMPORTE"]]\
 
 #print(df_VentaSemanalPorCuenta.head())
 
-########
-# Merging df_primerRemitoPorCuenta, df_ultimoRemitoPorCuenta and 
+
+############
+# Merging df_primerRemitoPorCuenta, df_ultimoRemitoPorCuenta, 
 # df_ventaPesosPorCuenta and df_VentaSemanalPorCuenta into a new
 # dataframe, df_remitosVentasPorCliente
-########
+############
 
 df_remitosVentasPorCliente = pd.merge(
     df_primerRemitoPorCuenta,
@@ -265,6 +265,7 @@ df_remitosVentasPorCliente["Venta $ Prom Ult 7 Dias"] = \
 
 #print(df_remitosVentasPorCliente.head())
 
+
 #############
 # -Merge df_remitosVentasPorCliente with df_cuentasDeudoras to get 
 # the "SALDOCUENTA" column
@@ -292,8 +293,6 @@ df_remitosVentasPorCliente["Dias Venta Adeud"] = \
         , axis= 1
     )
 
-# print(df_remitosVentasPorCliente["Dias Venta Adeud"].head())
-
 def condDeuda(diasAdeudados):
     if diasAdeudados < 20:
         return "Normal"
@@ -318,27 +317,31 @@ df_condicionCuentasRetrasadas = \
 df_condicionCuentasRetrasadas = \
 df_condicionCuentasRetrasadas.sort_values(by=["SALDOCUENTA"])
 
-#####################
-#####################
-#######REVISAR#######
-# Esta sección ha agregado 50 seg de procesamiento y cambio en el tipo del 
-# campo "Dias Venta Adeud" 
+#print(df_condicionCuentasRetrasadas)
+
+
+##############
+# Creating Total Row for "SALDOCUENTA" column
+##############
+
+# Will cast "Dias Venta Adeud" as a string to avoid trailing zeroes and sum
+df_condicionCuentasRetrasadas= \
+    df_condicionCuentasRetrasadas.astype({"Dias Venta Adeud": "string"})
+
 df_condicionCuentasRetrasadas.loc["colTOTAL"]= \
     pd.Series(df_condicionCuentasRetrasadas["SALDOCUENTA"].sum()
         , index= ["SALDOCUENTA"]
     )
-###########################
-# df_condicionCuentasRetrasadas.loc["colTOTAL"]= \
-#     df_condicionCuentasRetrasadas.sum(numeric_only=True)
 
 df_condicionCuentasRetrasadas= \
     df_condicionCuentasRetrasadas.fillna({"NOMBRE":"TOTAL"}).fillna("")
 
-#######REVISAR#######
-#####################
-#####################
-
 #print(df_condicionCuentasRetrasadas)
+
+
+##############
+# STYLING of the dataframe
+##############
 
 # The next function will format cells with the value "Excedido" to 
 # have a red background
@@ -358,13 +361,20 @@ df_conEstilo_condCtaRetrasadas = \
         }]) \
         .apply(excedidoFondoRojo,subset=["Cond Deuda Cliente"])
 
+
 ##############
 # NOTE: to show the dataframe with the style in Jupyter Notebook you need to 
 # use display() method even when it seem to not be available. If you use 
 # print() it will return an error because is an styler object.
+# Also display() will return an error in the Terminal window.
 ##############
 
 display(df_conEstilo_condCtaRetrasadas)
+
+
+##############
+# PRINTING dataframe as an image
+##############
 
 # dfi.export(df_conEstilo_condCtaRetrasadas,
 #     "dataframe_test_"
@@ -375,18 +385,3 @@ display(df_conEstilo_condCtaRetrasadas)
 tiempoFinal = pd.to_datetime("today")
 print("\nTiempo de Ejecucion Total:")
 print(tiempoFinal-tiempoInicio)
-
-# import pandas as pd
-# import numpy as np
-# def apply_formatting(col):
-#     if col.name == 'a':
-#         return ['background-color: red' if c > 50 else '' for c in col.values]
-#     if col.name == 'b':
-#         return ['background-color: green' if c > 10 else '' for c in col.values]
-#     if col.name == 'c':
-#         return ['background-color: blue' if c > 30 else '' for c in col.values]
-
-# data = pd.DataFrame(
-#     np.random.randint(0, 100, 30).reshape(10, 3), columns=['a', 'b', 'c'])
-
-# data.style.apply(apply_formatting)  # axis=0 by default
