@@ -318,19 +318,25 @@ df_condicionCuentasRetrasadas = \
 df_condicionCuentasRetrasadas = \
 df_condicionCuentasRetrasadas.sort_values(by=["SALDOCUENTA"])
 
+#####################
+#####################
 #######REVISAR#######
 # Esta sección ha agregado 50 seg de procesamiento y cambio en el tipo del 
 # campo "Dias Venta Adeud" 
-
-
 df_condicionCuentasRetrasadas.loc["colTOTAL"]= \
     pd.Series(df_condicionCuentasRetrasadas["SALDOCUENTA"].sum()
         , index= ["SALDOCUENTA"]
     )
+###########################
+# df_condicionCuentasRetrasadas.loc["colTOTAL"]= \
+#     df_condicionCuentasRetrasadas.sum(numeric_only=True)
+
 df_condicionCuentasRetrasadas= \
     df_condicionCuentasRetrasadas.fillna({"NOMBRE":"TOTAL"}).fillna("")
 
 #######REVISAR#######
+#####################
+#####################
 
 #print(df_condicionCuentasRetrasadas)
 
