@@ -372,8 +372,10 @@ df_conEstilo_condCtaRetrasadas = \
 # Also display() will return an error in the Terminal window.
 ##############
 
-display(df_conEstilo_condCtaRetrasadas)
-
+try:
+    display(df_conEstilo_condCtaRetrasadas)
+except:
+    print("")
 
 ##############
 # PRINTING dataframe as an image
