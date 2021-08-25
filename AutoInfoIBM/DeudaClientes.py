@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 #########
 # Formating display of dataframes with comma separator for numbers
@@ -354,7 +355,10 @@ df_conEstilo_condCtaRetrasadas = \
     df_condicionCuentasRetrasadas.style \
         .format({"SALDOCUENTA": "${0:,.0f}"}) \
         .hide_index() \
-        .set_caption("DEUDORES MOROSOS Y EXCEDIDOS") \
+        .set_caption("DEUDORES MOROSOS Y EXCEDIDOS"
+            +" "
+            +tiempoInicio.strftime("%d-%m-%y")
+        ) \
         .set_properties(subset=["Dias Venta Adeud", "Cond Deuda Cliente"]
             , **{"text-align": "center"}) \
         .set_properties(border= "2px solid black") \
@@ -381,11 +385,23 @@ except:
 # PRINTING dataframe as an image
 ##############
 
+# This will print the df with a name and time so you can have multiple
+# files in the same folder
+#
 # dfi.export(df_conEstilo_condCtaRetrasadas,
 #     "dataframe_test_"
 #     + pd.to_datetime("today").strftime("%Y-%m-%d_%H%M%S")
 #     + ".png"
 # )
+
+# This will print the df with a unique name and will erase the old image 
+# everytime the script is run
+
+if os.path.exists("C:\Informes\AutoInfoIBM\Info_Morosos.png"):
+    os.remove("C:\Informes\AutoInfoIBM\Info_Morosos.png")
+    dfi.export(df_conEstilo_condCtaRetrasadas, "Info_Morosos.png")
+else:
+    dfi.export(df_conEstilo_condCtaRetrasadas, "Info_Morosos.png")
 
 tiempoFinal = pd.to_datetime("today")
 print("\nTiempo de Ejecucion Total:")
