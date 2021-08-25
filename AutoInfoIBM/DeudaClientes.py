@@ -140,8 +140,11 @@ df_cuentasDeudoras = df_cuentasDeudoras.convert_dtypes()
 # Requirements:
 # -Filter unused columns
 # -Cast PTOVTA, NROREMITO and NROCLIENTE as string
-# -Filter data Previous to 2021-01-01
-######### 
+# -Get data not older than a year back from today
+#########
+
+fechaAñoAtras = (tiempoInicio - pd.Timedelta(365, unit="d"))\
+    .strftime("'%Y%m%d'")
 
 df_remitos = pd.read_sql("""
     SELECT 
@@ -163,7 +166,7 @@ df_remitos = pd.read_sql("""
         ,FacCli.[ListaSaldoCC]
     FROM [Rumaos].[dbo].[FacRemDet]
     Left Outer Join FacCli on FacRemDet.NROCLIENTE = FacCli.NROCLIPRO
-    where FECHASQL >= '20210101'
+    where FECHASQL >= """+fechaAñoAtras+"""
         and ListaSaldoCC = 1
         and FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU < -100
 """, db_conex)
