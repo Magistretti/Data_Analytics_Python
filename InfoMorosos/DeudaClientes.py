@@ -380,7 +380,7 @@ df_conEstilo_condCtaRetrasadas = \
 ##############
 
 try:
-    display(df_conEstilo_condCtaRetrasadas)
+    display(df_conEstilo_condCtaRetrasadas) # type: ignore
 except:
     print("")
 
