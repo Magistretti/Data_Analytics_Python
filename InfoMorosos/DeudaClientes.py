@@ -1,3 +1,9 @@
+###################################
+#
+#     INFORME DEUDORES MOROSOS
+#
+###################################
+
 import os
 import pandas as pd
 #########
@@ -400,11 +406,13 @@ except:
 # This will print the df with a unique name and will erase the old image 
 # everytime the script is run
 
-if os.path.exists("C:\Informes\AutoInfoIBM\Info_Morosos.png"):
-    os.remove("C:\Informes\AutoInfoIBM\Info_Morosos.png")
-    dfi.export(df_conEstilo_condCtaRetrasadas, "Info_Morosos.png")
+if os.path.exists("C:\Informes\InfoMorosos\Info_Morosos.png"):
+    os.remove("C:\Informes\InfoMorosos\Info_Morosos.png")
+    dfi.export(df_conEstilo_condCtaRetrasadas, 
+        "C:\Informes\InfoMorosos\Info_Morosos.png")
 else:
-    dfi.export(df_conEstilo_condCtaRetrasadas, "Info_Morosos.png")
+    dfi.export(df_conEstilo_condCtaRetrasadas, 
+        "C:\Informes\InfoMorosos\Info_Morosos.png")
 
 tiempoFinal = pd.to_datetime("today")
 print("\nTiempo de Ejecucion Total:")
