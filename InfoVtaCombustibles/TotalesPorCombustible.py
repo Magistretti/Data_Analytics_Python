@@ -14,7 +14,7 @@ tiempoInicio = pd.to_datetime("today")
 
 #########
 # Formating display of dataframes with comma separator for numbers
-pd.options.display.float_format = "{:20,.2f}".format 
+pd.options.display.float_format = "{:20,.0f}".format 
 #########
 
 # Try connecting to the SQL Server, will report error and stop if failed
@@ -51,3 +51,26 @@ df_empVenta = pd.read_sql("""
 
 # print(df_empVenta.info())
 # print(df_empVenta.head())
+
+def grupo(codproducto):
+    if codproducto == "GO" or codproducto == "EU":
+        return "GASÓLEOS"
+    elif codproducto == "NS" or codproducto == "NU":
+        return "NAFTAS"
+    else:
+        return "GNC"
+
+#########
+df_empVenta["GRUPO"]= grupo(df_empVenta["CODPRODUCTO"])
+print(df_empVenta.head())
+#####ERROR
+
+
+tablita = pd.pivot_table(df_empVenta
+    , values="VTATOTVOL"
+    , index="UEN"
+    , columns="CODPRODUCTO"
+    , fill_value=0
+    , margins=True
+)
+# print(tablita)
