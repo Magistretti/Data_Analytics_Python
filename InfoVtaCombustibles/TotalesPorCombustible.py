@@ -60,6 +60,45 @@ df_empVenta["UEN"] = df_empVenta["UEN"].str.strip()
 df_empVenta["CODPRODUCTO"] = df_empVenta["CODPRODUCTO"].str.strip()
 
 
+########
+# Join SQL tables dbo.EmpPromo and dbo.Promocio and convert to Dataframe
+# 
+# Requirements:
+# -Filter unused columns
+# -Rename VOLUMEN as VTATOTVOL
+# -Get data from yesterday, VOLUMEN > 0 and EmpPromo.CODPROMO = 30 
+# OR data from yesterday, VOLUMEN > 0 and Promocio.DESCRIPCION that contains
+# "PRUEBA", "TRASLADO" or "MAYORISTA"
+#
+########
+
+
+df_regalosTraslados = pd.read_sql("""
+    SELECT
+        EmP.[UEN]
+        ,EmP.[FECHASQL]
+        ,EmP.[CODPRODUCTO]
+        ,EmP.[VOLUMEN] as VTATOTVOL
+    FROM [Rumaos].[dbo].[EmpPromo] AS EmP
+        INNER JOIN Promocio AS P 
+            ON EmP.UEN = P.UEN 
+            AND EmP.CODPROMO = P.CODPROMO
+    WHERE FECHASQL = DATEADD(day, -1, CAST(GETDATE() AS date))
+        AND EmP.VOLUMEN > '0' 
+        AND (EmP.[CODPROMO] = '30'
+            OR P.[DESCRIPCION] like '%PRUEBA%'
+            OR P.[DESCRIPCION] like '%TRASLADO%'
+            OR P.[DESCRIPCION] like '%MAYORISTA%'
+        )
+""", db_conex)
+
+df_regalosTraslados = df_regalosTraslados.convert_dtypes()
+
+df_regalosTraslados["UEN"] = df_regalosTraslados["UEN"].str.strip()
+df_regalosTraslados["CODPRODUCTO"] = \
+    df_regalosTraslados["CODPRODUCTO"].str.strip()
+
+
 def grupo(codproducto):
     if codproducto == "GO" or codproducto == "EU":
         return "GASÓLEOS"
@@ -96,28 +135,3 @@ df_empVenta["GRUPO"] = df_empVenta["GRUPO"].astype(categoriaGrupo)
 #     , margins_name="TOTAL"
 # )
 # print(tablita.iloc[:, :-1])
-
-df_regalosTraslados = pd.read_sql("""
-    SELECT
-        EmP.[UEN]
-        ,EmP.[FECHASQL]
-        ,EmP.[CODPRODUCTO]
-        ,EmP.[VOLUMEN] as VTATOTVOL
-    FROM [Rumaos].[dbo].[EmpPromo] AS EmP
-        INNER JOIN Promocio AS P 
-            ON EmP.UEN = P.UEN 
-            AND EmP.CODPROMO = P.CODPROMO
-    WHERE FECHASQL = DATEADD(day, -1, CAST(GETDATE() AS date))
-        AND EmP.VOLUMEN > '0' 
-        AND (EmP.[CODPROMO] = '30'
-            OR P.[DESCRIPCION] like '%PRUEBA%'
-            OR P.[DESCRIPCION] like '%TRASLADO%'
-            OR P.[DESCRIPCION] like '%MAYORISTA%'
-        )
-""", db_conex)
-
-df_regalosTraslados = df_regalosTraslados.convert_dtypes()
-
-df_regalosTraslados["UEN"] = df_regalosTraslados["UEN"].str.strip()
-df_regalosTraslados["CODPRODUCTO"] = \
-    df_regalosTraslados["CODPRODUCTO"].str.strip()
