@@ -32,6 +32,7 @@ except Exception as e:
     print("Ocurrió un error al conectar a SQL Server: ", e)
     exit()
 
+
 ########
 # Convert dbo.EmpVenta SQL table to Dataframe
 # 
@@ -52,12 +53,12 @@ df_empVenta = pd.read_sql("""
 """, db_conex)
 
 df_empVenta = df_empVenta.convert_dtypes()
-# print(df_empVenta.info())
-# print(df_empVenta.head())
-
 # Removing trailing whitespace from the UEN and CODPRODUCTO columns
 df_empVenta["UEN"] = df_empVenta["UEN"].str.strip()
 df_empVenta["CODPRODUCTO"] = df_empVenta["CODPRODUCTO"].str.strip()
+
+# print(df_empVenta.info())
+# print(df_empVenta.head())
 
 
 ########
@@ -65,20 +66,19 @@ df_empVenta["CODPRODUCTO"] = df_empVenta["CODPRODUCTO"].str.strip()
 # 
 # Requirements:
 # -Filter unused columns
-# -Rename VOLUMEN as VTATOTVOL
+# -Rename VOLUMEN as VTATOTVOL and set it NEGATIVE
 # -Get data from yesterday, VOLUMEN > 0 and EmpPromo.CODPROMO = 30 
 # OR data from yesterday, VOLUMEN > 0 and Promocio.DESCRIPCION that contains
 # "PRUEBA", "TRASLADO" or "MAYORISTA"
 #
 ########
 
-
 df_regalosTraslados = pd.read_sql("""
     SELECT
         EmP.[UEN]
         ,EmP.[FECHASQL]
         ,EmP.[CODPRODUCTO]
-        ,EmP.[VOLUMEN] as VTATOTVOL
+        ,-EmP.[VOLUMEN] as VTATOTVOL
     FROM [Rumaos].[dbo].[EmpPromo] AS EmP
         INNER JOIN Promocio AS P 
             ON EmP.UEN = P.UEN 
@@ -93,10 +93,17 @@ df_regalosTraslados = pd.read_sql("""
 """, db_conex)
 
 df_regalosTraslados = df_regalosTraslados.convert_dtypes()
-
+# Removing whitespace
 df_regalosTraslados["UEN"] = df_regalosTraslados["UEN"].str.strip()
 df_regalosTraslados["CODPRODUCTO"] = \
     df_regalosTraslados["CODPRODUCTO"].str.strip()
+
+# print(df_regalosTraslados.info())
+# print(df_regalosTraslados.head())
+
+
+# Append our previous dataframes to have the real sales volume
+df_empVentaNeteado = df_empVenta.append(df_regalosTraslados, ignore_index=True)
 
 
 def grupo(codproducto):
@@ -107,8 +114,8 @@ def grupo(codproducto):
     else:
         return "GNC"
 
-
-df_empVenta["GRUPO"] = df_empVenta.apply(
+# Create column GRUPO from column CODPRODUCTO
+df_empVentaNeteado["GRUPO"] = df_empVentaNeteado.apply(
     lambda row: grupo(row["CODPRODUCTO"])
         , axis= 1
 )
@@ -123,15 +130,18 @@ categoriaGrupo = CategoricalDtype(
 )
 
 # Casting GRUPO column as ordered categorical
-df_empVenta["GRUPO"] = df_empVenta["GRUPO"].astype(categoriaGrupo)
+df_empVentaNeteado["GRUPO"] = df_empVentaNeteado["GRUPO"].astype(categoriaGrupo)
 
-# tablita = pd.pivot_table(df_empVenta
-#     , values="VTATOTVOL"
-#     , index="UEN"
-#     , columns="GRUPO"
-#     , aggfunc=sum
-#     , fill_value=0
-#     , margins=True
-#     , margins_name="TOTAL"
-# )
-# print(tablita.iloc[:, :-1])
+# Pivot table of data to get results of VTATOTVOL per UEN grouped by Grupo
+df_resultados = pd.pivot_table(df_empVentaNeteado
+    , values="VTATOTVOL"
+    , index="UEN"
+    , columns="GRUPO"
+    , aggfunc=sum
+    , fill_value=0
+    , margins=True
+    , margins_name="TOTAL"
+)
+# Eliminate column "TOTAL"
+df_resultados = df_resultados.iloc[:, :-1]
+print(df_resultados)
