@@ -394,26 +394,32 @@ except:
 # PRINTING dataframe as an image
 ##############
 
-# This will print the df with a name and time so you can have multiple
+ubicacion = "C:\Informes\InfoMorosos\\"
+
+# This will print the df with name and time so you can have multiple
 # files in the same folder
-#
+
 # dfi.export(df_conEstilo_condCtaRetrasadas,
-#     "dataframe_test_"
+#     ubicacion
+#     +"Info_Morosos"
 #     + pd.to_datetime("today").strftime("%Y-%m-%d_%H%M%S")
 #     + ".png"
 # )
 
+
 # This will print the df with a unique name and will erase the old image 
 # everytime the script is run
 
-if os.path.exists("C:\Informes\InfoMorosos\Info_Morosos.png"):
-    os.remove("C:\Informes\InfoMorosos\Info_Morosos.png")
+if os.path.exists(ubicacion+"Info_Morosos.png"):
+    os.remove(ubicacion+"Info_Morosos.png")
     dfi.export(df_conEstilo_condCtaRetrasadas, 
-        "C:\Informes\InfoMorosos\Info_Morosos.png")
+        ubicacion+"Info_Morosos.png")
 else:
     dfi.export(df_conEstilo_condCtaRetrasadas, 
-        "C:\Informes\InfoMorosos\Info_Morosos.png")
+        ubicacion+"Info_Morosos.png")
 
+
+# Timer
 tiempoFinal = pd.to_datetime("today")
-print("\nTiempo de Ejecucion Total:")
+print("\nInfo Morosos"+"\nTiempo de Ejecucion Total:")
 print(tiempoFinal-tiempoInicio)
