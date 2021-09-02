@@ -159,7 +159,7 @@ df_conEstilo_resultados = \
         .hide_index() \
         .set_caption("VOLUMEN DE VENTAS"
             +" "
-            +tiempoInicio.strftime("%d-%m-%y")
+            +((tiempoInicio-pd.to_timedelta(1,"days")).strftime("%d-%m-%y"))
         ) \
         .set_properties(subset=["GASÓLEOS", "NAFTAS", "GNC"]
             , **{"text-align": "center", "width": "100px"}) \
