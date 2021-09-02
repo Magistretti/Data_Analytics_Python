@@ -144,4 +144,69 @@ df_resultados = pd.pivot_table(df_empVentaNeteado
 )
 # Eliminate column "TOTAL"
 df_resultados = df_resultados.iloc[:, :-1]
-print(df_resultados)
+# Restore index UEN like a column
+df_resultados = df_resultados.reset_index(level=0)
+#print(df_resultados)
+
+
+##############
+# STYLING of the dataframe
+##############
+
+df_conEstilo_resultados = \
+    df_resultados.style \
+        .format("{0:,.0f}",subset=["GASÓLEOS","NAFTAS","GNC"]) \
+        .hide_index() \
+        .set_caption("VOLUMEN DE VENTAS"
+            +" "
+            +tiempoInicio.strftime("%d-%m-%y")
+        ) \
+        .set_properties(subset=["GASÓLEOS", "NAFTAS", "GNC"]
+            , **{"text-align": "center", "width": "100px"}) \
+        .set_properties(border= "2px solid black") \
+        .set_table_styles([
+            {"selector": "caption", "props": 
+                [("font-size", "20px")
+                ]
+            }
+            , {"selector": "th", "props": 
+                [("text-align", "center")
+                    ,("background-color","black")
+                    ,("color","white")
+                ]
+            }
+        ]) \
+        .apply(lambda x: ["background: black" if x.name == 14 else "" for i in x]
+            , axis=1) \
+        .apply(lambda x: ["color: white" if x.name == 14 else "" for i in x]
+            , axis=1)
+
+# NOTE: display() will show styler object in Jupyter
+try:
+    display(df_conEstilo_resultados) # type: ignore
+except:
+    print("")
+
+
+##############
+# PRINTING dataframe as an image
+##############
+
+# This will print the df with a unique name and will erase the old image 
+# everytime the script is run
+
+ubicacion = "C:\Informes\InfoVtaCombustibles\\"
+
+if os.path.exists(ubicacion+"Info_VolumenVentas.png"):
+    os.remove(ubicacion+"Info_VolumenVentas.png")
+    dfi.export(df_conEstilo_resultados, 
+        ubicacion+"Info_VolumenVentas.png")
+else:
+    dfi.export(df_conEstilo_resultados, 
+        ubicacion+"Info_VolumenVentas.png")
+
+
+# Timer
+tiempoFinal = pd.to_datetime("today")
+print("\nInfo Volumen de Ventas"+"\nTiempo de Ejecucion Total:")
+print(tiempoFinal-tiempoInicio)
