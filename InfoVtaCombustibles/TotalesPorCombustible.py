@@ -204,19 +204,22 @@ def estiladorVtaTitulo(df,columnaValores):
         .format("{0:,.0f}", subset=[columnaValores]) \
         .hide_index() \
         .set_caption("VOLUMEN DE VENTAS"
-            +" "
-            +((tiempoInicio-pd.to_timedelta(1,"days")).strftime("%d-%m-%y"))
+            +"\n"
+            +((tiempoInicio-pd.to_timedelta(1,"days")).strftime("%d/%m/%y"))
         ) \
         .set_properties(subset=[columnaValores]
             , **{"text-align": "center", "width": "100px"}) \
         .set_properties(border= "2px solid black") \
         .set_table_styles([
-            {"selector": "caption", "props": 
-                [("font-size", "20px")
+            {"selector": "caption", 
+                "props": [
+                    ("font-size", "20px")
+                    ,("text-align", "center")
                 ]
             }
-            , {"selector": "th", "props": 
-                [("text-align", "center")
+            , {"selector": "th", 
+                "props": [
+                    ("text-align", "center")
                     ,("background-color","black")
                     ,("color","white")
                 ]
@@ -238,12 +241,9 @@ def estiladorVtaSinTitulo(df,columnaValores):
             , **{"text-align": "center", "width": "100px"}) \
         .set_properties(border= "2px solid black") \
         .set_table_styles([
-            {"selector": "caption", "props": 
-                [("font-size", "20px")
-                ]
-            }
-            , {"selector": "th", "props": 
-                [("text-align", "center")
+            {"selector": "th",
+                "props": [
+                    ("text-align", "center")
                     ,("background-color","black")
                     ,("color","white")
                 ]
@@ -279,14 +279,21 @@ except:
 # everytime the script is run
 
 ubicacion = "C:\Informes\InfoVtaCombustibles\\"
+nombreGOEU = "Info_VolVtas_Gasoleos.png"
+nombreNSNU = "Info_VolVtas_Naftas.png"
+nombreGNC = "Info_VolVtas_GNC.png"
 
-if os.path.exists(ubicacion+"Info_VolumenVentas.png"):
-    os.remove(ubicacion+"Info_VolumenVentas.png")
-    dfi.export(df_conEstilo_resultados, 
-        ubicacion+"Info_VolumenVentas.png")
-else:
-    dfi.export(df_conEstilo_resultados, 
-        ubicacion+"Info_VolumenVentas.png")
+def df_to_image(df, ubicacion, nombre):
+    if os.path.exists(ubicacion+nombre):
+        os.remove(ubicacion+nombre)
+        dfi.export(df, ubicacion+nombre)
+    else:
+        dfi.export(df, ubicacion+nombre)
+
+
+df_to_image(df_resultadosGOEU_Estilo, ubicacion, nombreGOEU)
+df_to_image(df_resultadosNSNU_Estilo, ubicacion, nombreNSNU)
+df_to_image(df_resultadosGNC_Estilo, ubicacion, nombreGNC)
 
 
 # Timer
