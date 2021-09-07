@@ -120,17 +120,18 @@ df_empVentaNeteado["GRUPO"] = df_empVentaNeteado.apply(
         , axis= 1
 )
 
-# Creating an ordered categorical type of GRUPO
-categoriaGrupo = CategoricalDtype(
-    categories=[
-        "GASÓLEOS"
-        ,"NAFTAS"
-        ,"GNC"
-    ], ordered=True
-)
-
-# Casting GRUPO column as ordered categorical
-df_empVentaNeteado["GRUPO"] = df_empVentaNeteado["GRUPO"].astype(categoriaGrupo)
+# # Creating an ordered categorical type of GRUPO for when we need to show
+# # an ordered pivot_table by category
+# categoriaGrupo = CategoricalDtype(
+#     categories=[
+#         "GASÓLEOS"
+#         ,"NAFTAS"
+#         ,"GNC"
+#     ], ordered=True
+# )
+#
+# # Casting GRUPO column as ordered categorical
+# df_empVentaNeteado["GRUPO"] = df_empVentaNeteado["GRUPO"].astype(categoriaGrupo)
 
 # Pivot table of data to get results of VTATOTVOL per UEN grouped by Grupo
 df_resultados = pd.pivot_table(df_empVentaNeteado
@@ -139,29 +140,74 @@ df_resultados = pd.pivot_table(df_empVentaNeteado
     , columns="GRUPO"
     , aggfunc=sum
     , fill_value=0
-    , margins=True
-    , margins_name="TOTAL"
+    # , margins=True
+    # , margins_name="TOTAL"
 )
-# Eliminate column "TOTAL"
-df_resultados = df_resultados.iloc[:, :-1]
+# If we add margins then we eliminate column "TOTAL"
+# df_resultados = df_resultados.iloc[:, :-1]
+
 # Restore index UEN like a column
-df_resultados = df_resultados.reset_index(level=0)
-#print(df_resultados)
+df_resultados = df_resultados.reset_index()
+# print(df_resultados)
+
+######################
+# Now we will split the pivot table by group to get 3 set of data ordered in
+# descending manner
+######################
+
+####### GASÓLEOS #######
+
+# Filter and sort by Descending order
+df_resultadosGOEU = df_resultados[["UEN","GASÓLEOS"]].sort_values(
+    by=["GASÓLEOS"]
+    , ascending=False
+)
+# Creating a total row
+df_resultadosGOEU.loc["colTOTAL"]= pd.Series(
+    df_resultadosGOEU["GASÓLEOS"].sum()
+    , index=["GASÓLEOS"]
+)
+# Give name to total row in the "UEN" column filling the NaN
+df_resultadosGOEU = df_resultadosGOEU.fillna({"UEN":"TOTAL"})
+
+####### NAFTAS #######
+
+df_resultadosNSNU = df_resultados[["UEN","NAFTAS"]].sort_values(
+    by=["NAFTAS"]
+    , ascending=False
+)
+df_resultadosNSNU.loc["colTOTAL"]= pd.Series(
+    df_resultadosNSNU["NAFTAS"].sum()
+    , index=["NAFTAS"]
+)
+df_resultadosNSNU = df_resultadosNSNU.fillna({"UEN":"TOTAL"})
+
+####### GNC #######
+
+df_resultadosGNC = df_resultados[["UEN","GNC"]].sort_values(
+    by=["GNC"]
+    , ascending=False
+)
+df_resultadosGNC.loc["colTOTAL"]= pd.Series(
+    df_resultadosGNC["GNC"].sum()
+    , index=["GNC"]
+)
+df_resultadosGNC = df_resultadosGNC.fillna({"UEN":"TOTAL"})
 
 
 ##############
 # STYLING of the dataframe
 ##############
 
-df_conEstilo_resultados = \
-    df_resultados.style \
-        .format("{0:,.0f}",subset=["GASÓLEOS","NAFTAS","GNC"]) \
+def estiladorVtaTitulo(df,columnaValores):
+    resultado = df.style \
+        .format("{0:,.0f}", subset=[columnaValores]) \
         .hide_index() \
         .set_caption("VOLUMEN DE VENTAS"
             +" "
             +((tiempoInicio-pd.to_timedelta(1,"days")).strftime("%d-%m-%y"))
         ) \
-        .set_properties(subset=["GASÓLEOS", "NAFTAS", "GNC"]
+        .set_properties(subset=[columnaValores]
             , **{"text-align": "center", "width": "100px"}) \
         .set_properties(border= "2px solid black") \
         .set_table_styles([
@@ -176,14 +222,51 @@ df_conEstilo_resultados = \
                 ]
             }
         ]) \
-        .apply(lambda x: ["background: black" if x.name == 14 else "" for i in x]
+        .apply(lambda x: ["background: black" if x.name == "colTOTAL" 
+            else "" for i in x]
             , axis=1) \
-        .apply(lambda x: ["color: white" if x.name == 14 else "" for i in x]
+        .apply(lambda x: ["color: white" if x.name == "colTOTAL" 
+            else "" for i in x]
             , axis=1)
+    return resultado
+
+def estiladorVtaSinTitulo(df,columnaValores):
+    resultado = df.style \
+        .format("{0:,.0f}", subset=[columnaValores]) \
+        .hide_index() \
+        .set_properties(subset=[columnaValores]
+            , **{"text-align": "center", "width": "100px"}) \
+        .set_properties(border= "2px solid black") \
+        .set_table_styles([
+            {"selector": "caption", "props": 
+                [("font-size", "20px")
+                ]
+            }
+            , {"selector": "th", "props": 
+                [("text-align", "center")
+                    ,("background-color","black")
+                    ,("color","white")
+                ]
+            }
+        ]) \
+        .apply(lambda x: ["background: black" if x.name == "colTOTAL" 
+            else "" for i in x]
+            , axis=1) \
+        .apply(lambda x: ["color: white" if x.name == "colTOTAL" 
+            else "" for i in x]
+            , axis=1)
+    return resultado
+
+df_resultadosGOEU_Estilo = estiladorVtaSinTitulo(df_resultadosGOEU, "GASÓLEOS")
+df_resultadosNSNU_Estilo = estiladorVtaTitulo(df_resultadosNSNU, "NAFTAS")
+df_resultadosGNC_Estilo = estiladorVtaSinTitulo(df_resultadosGNC, "GNC")
+
 
 # NOTE: display() will show styler object in Jupyter
 try:
-    display(df_conEstilo_resultados) # type: ignore
+    display(df_resultadosGOEU_Estilo) # type: ignore
+    display(df_resultadosNSNU_Estilo) # type: ignore
+    display(df_resultadosGNC_Estilo) # type: ignore
 except:
     print("")
 
