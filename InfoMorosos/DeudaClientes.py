@@ -366,16 +366,33 @@ df_conEstilo_condCtaRetrasadas = \
         .hide_index() \
         .set_caption("DEUDORES MOROSOS Y EXCEDIDOS"
             +" "
-            +tiempoInicio.strftime("%d-%m-%y")
+            +tiempoInicio.strftime("%d/%m/%y")
         ) \
         .set_properties(subset=["Dias Venta Adeud", "Cond Deuda Cliente"]
             , **{"text-align": "center"}) \
         .set_properties(border= "2px solid black") \
         .set_table_styles([
-            {"selector": "caption", "props": [("font-size", "20px")]}
-            , {"selector": "th", "props": [("text-align", "center")]}
+            {"selector": "caption",
+                "props": [
+                    ("font-size", "20px")
+                    ,("text-align", "center")
+                ]
+            }
+            , {"selector": "th",
+                "props": [
+                    ("text-align", "center")
+                    ,("background-color","black")
+                    ,("color","white")
+                ]
+            }
         ]) \
-        .apply(excedidoFondoRojo,subset=["Cond Deuda Cliente"])
+        .apply(excedidoFondoRojo,subset=["Cond Deuda Cliente"]) \
+        .apply(lambda x: ["background: black" if x.name == "colTOTAL" 
+            else "" for i in x]
+            , axis=1) \
+        .apply(lambda x: ["color: white" if x.name == "colTOTAL" 
+            else "" for i in x]
+            , axis=1)
 
 
 ##############
