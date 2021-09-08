@@ -5,7 +5,7 @@
 ###################################
 
 import os
-from numpy import row_stack
+from PIL import Image
 import pandas as pd
 from pandas.api.types import CategoricalDtype
 import dataframe_image as dfi
@@ -150,6 +150,7 @@ df_resultados = pd.pivot_table(df_empVentaNeteado
 df_resultados = df_resultados.reset_index()
 # print(df_resultados)
 
+
 ######################
 # Now we will split the pivot table by group to get 3 set of data ordered in
 # descending manner
@@ -284,6 +285,17 @@ nombreNSNU = "Info_VolVtas_Naftas.png"
 nombreGNC = "Info_VolVtas_GNC.png"
 
 def df_to_image(df, ubicacion, nombre):
+    """
+    Esta función usa las biblioteca "dataframe_Image as dfi" y "os" para 
+    generar un archivo .png de un dataframe. Si el archivo ya existe, este será
+    reemplazado por el nuevo archivo.
+
+    Args:
+        df: dataframe a convertir
+         ubicacion: ubicacion local donde se quiere grabar el archivo
+          nombre: nombre del archivo incluyendo extensión .png (ej: "hello.png")
+
+    """
     if os.path.exists(ubicacion+nombre):
         os.remove(ubicacion+nombre)
         dfi.export(df, ubicacion+nombre)
@@ -295,23 +307,68 @@ df_to_image(df_resultadosGOEU_Estilo, ubicacion, nombreGOEU)
 df_to_image(df_resultadosNSNU_Estilo, ubicacion, nombreNSNU)
 df_to_image(df_resultadosGNC_Estilo, ubicacion, nombreGNC)
 
-#import sys
-from PIL import Image
 
-images = [Image.open(x) for x in [ubicacion+nombreGOEU, ubicacion+nombreNSNU, ubicacion+nombreGNC]]
-widths, heights = zip(*(i.size for i in images))
+listaImagenes = [
+    ubicacion+nombreGOEU
+    , ubicacion+nombreNSNU
+    , ubicacion+nombreGNC
+]
 
-total_width = sum(widths)
-max_height = max(heights)
+def append_images(listOfImages, direction='horizontal',
+                  bg_color=(255,255,255), alignment='center'):
+    """
+    Appends images in horizontal/vertical direction.
 
-new_im = Image.new('RGB', (total_width, max_height))
+    Args:
+        listOfImages: List of images
+        direction: direction of concatenation, 'horizontal' or 'vertical'
+        bg_color: Background color (default: white)
+        alignment: alignment mode if images need padding;
+           'left', 'right', 'top', 'bottom', or 'center'
 
-x_offset = 0
-for im in images:
-  new_im.paste(im, (x_offset,0))
-  x_offset += im.size[0]
+    Returns:
+        Concatenated image as a new PIL image object.
+    """
+    images = [Image.open(x) for x in listOfImages]
+    widths, heights = zip(*(i.size for i in images))
 
-new_im.save('test.jpg')
+    if direction=='horizontal':
+        new_width = sum(widths)
+        new_height = max(heights)
+    else:
+        new_width = max(widths)
+        new_height = sum(heights)
+
+    new_im = Image.new('RGB', (new_width, new_height), color=bg_color)
+
+    offset = 0
+    for im in images:
+        if direction=='horizontal':
+            y = 0
+            if alignment == 'center':
+                y = int((new_height - im.size[1])/2)
+            elif alignment == 'bottom':
+                y = new_height - im.size[1]
+            new_im.paste(im, (offset, y))
+            offset += im.size[0]
+        else:
+            x = 0
+            if alignment == 'center':
+                x = int((new_width - im.size[0])/2)
+            elif alignment == 'right':
+                x = new_width - im.size[0]
+            new_im.paste(im, (x, offset))
+            offset += im.size[1]
+
+    return new_im
+
+
+# Will use append_images to append the images from the dataframes horizontally 
+# and bottom center them 
+fusionImagenesTablas = append_images(listaImagenes, alignment="bottom")
+# saving the image to "Info_VolumenVentas.png"
+fusionImagenesTablas.save(ubicacion+"Info_VolumenVentas.png")
+
 
 # Timer
 tiempoFinal = pd.to_datetime("today")
