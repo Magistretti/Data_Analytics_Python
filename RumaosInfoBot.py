@@ -4,7 +4,7 @@
 #
 ##########################
 
-from DatosTelegram import id_Autorizados, bot_token
+from DatosTelegram import id_Autorizados, bot_token, testbot_token
 from runpy import run_path
 import logging
 
