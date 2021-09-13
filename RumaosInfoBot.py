@@ -116,10 +116,11 @@ def button(update, context) -> None:
                 , "rb"
                 )
             )
-        except Exception as e:
+        except:  
+            # The module use an exit exception, this will catch it and every 
+            # other exception
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
-            print("/n", e)
 
     elif query.data == "Salir":
         query.bot.send_message(update.effective_chat.id
@@ -130,10 +131,9 @@ def button(update, context) -> None:
             run_path(filePath_Info_Morosos+"DeudaClientes.py")
             query.bot.send_message(update.effective_chat.id
                 , text="Informe reseteado")
-        except Exception as e:
+        except:
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
-            print("/n", e)
 
     else:
         query.bot.send_message(update.effective_chat.id
