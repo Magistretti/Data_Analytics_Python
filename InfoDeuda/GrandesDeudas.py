@@ -40,51 +40,51 @@ except Exception as e:
 # 
 # Requirements:
 # -Filter unused columns
-# -Show (FC.SALDOPREPAGO - FC.SALDOREMIPENDFACTU) AS TOTAL_DEUDA
+# -Show (FC.SALDOPREPAGO - FC.SALDOREMIPENDFACTU) AS "DEUDA TOTAL"
 # -Show vendor name
 # -Get data where (FC.SALDOPREPAGO - FC.SALDOREMIPENDFACTU) < '-400000'
 # Extra:
-# -Get TOTAL_DEUDA per vendor
+# -Get "DEUDA TOTAL" per vendor
 ########
 
 df_facCliDet = pd.read_sql("""
     SELECT
-        FC.[NROCLIPRO]
+        FC.[NROCLIPRO] AS "N° CLIENTE"
         ,FC.[NOMBRE]
-        ,FC.SALDOPREPAGO - FC.SALDOREMIPENDFACTU AS TOTAL_DEUDA
-        ,FC.[SALDOPREPAGO] AS SALDO_CUENTA
-        ,-FC.[SALDOREMIPENDFACTU] AS REMPENDFACT
-        ,V.NOMBREVEND
+        ,FC.SALDOPREPAGO - FC.SALDOREMIPENDFACTU AS "DEUDA TOTAL"
+        ,FC.[SALDOPREPAGO] AS "DEUDA FACTURADA"
+        ,-FC.[SALDOREMIPENDFACTU] AS "DEUDA REMITADA"
+        ,V.NOMBREVEND AS VENDEDOR
     FROM [Rumaos].[dbo].[FacCli] AS FC
         LEFT OUTER JOIN dbo.Vendedores AS V on FC.NROVEND = V.NROVEND
     where ListaSaldoCC = '1' 
         and (FC.SALDOPREPAGO - FC.SALDOREMIPENDFACTU) < '-400000'
-    order by TOTAL_DEUDA
+    order by "DEUDA TOTAL"
 """, db_conex)
 
 df_facCliPorVend = pd.read_sql("""
     SELECT
-        V.NOMBREVEND
-        ,sum(FC.SALDOPREPAGO - FC.SALDOREMIPENDFACTU) AS TOTAL_DEUDA
-        ,sum(FC.[SALDOPREPAGO]) AS SALDO_CUENTA
-        ,sum(-FC.[SALDOREMIPENDFACTU]) AS REMPENDFACT
+        V.NOMBREVEND AS VENDEDOR
+        ,sum(FC.SALDOPREPAGO - FC.SALDOREMIPENDFACTU) AS "DEUDA TOTAL"
+        ,sum(FC.[SALDOPREPAGO]) AS "DEUDA FACTURADA"
+        ,sum(-FC.[SALDOREMIPENDFACTU]) AS "DEUDA REMITADA"
     FROM [Rumaos].[dbo].[FacCli] AS FC
         LEFT OUTER JOIN dbo.Vendedores AS V on FC.NROVEND = V.NROVEND
     where ListaSaldoCC = '1' 
         and (FC.SALDOPREPAGO - FC.SALDOREMIPENDFACTU) < '-400000'
     group by V.NOMBREVEND
-    order by TOTAL_DEUDA
+    order by "DEUDA TOTAL"
 """, db_conex)
 
-# If NROCLIPRO is cast as a string without casting as an integer first,
+# If N° CLIENTE is cast as a string without casting as an integer first,
 # it will return a decimal point.
-df_facCliDet["NROCLIPRO"] = df_facCliDet["NROCLIPRO"].astype(int).astype(str)
+df_facCliDet["N° CLIENTE"] = df_facCliDet["N° CLIENTE"].astype(int).astype(str)
 df_facCliDet = df_facCliDet.convert_dtypes()
 df_facCliPorVend = df_facCliPorVend.convert_dtypes()
 # Whitespace cleaning
 df_facCliDet["NOMBRE"] = df_facCliDet["NOMBRE"].str.strip()
-df_facCliDet["NOMBREVEND"] = df_facCliDet["NOMBREVEND"].str.strip()    
-df_facCliPorVend["NOMBREVEND"] = df_facCliPorVend["NOMBREVEND"].str.strip()    
+df_facCliDet["VENDEDOR"] = df_facCliDet["VENDEDOR"].str.strip()    
+df_facCliPorVend["VENDEDOR"] = df_facCliPorVend["VENDEDOR"].str.strip()    
 
 # print(df_facCliDet.info())
 # print(df_facCliPorVend.info())
@@ -94,12 +94,12 @@ df_facCliDet.loc["colTOTAL"]= pd.Series(df_facCliDet.sum())
 df_facCliPorVend.loc["colTOTAL"]= pd.Series(df_facCliPorVend.sum())
 # Cleaning NaN
 df_facCliDet = df_facCliDet.fillna({
-    "NROCLIPRO":""
+    "N° CLIENTE":""
     , "NOMBRE":"TOTAL"
-    , "NOMBREVEND":""
+    , "VENDEDOR":""
 })
 df_facCliPorVend = df_facCliPorVend.fillna({
-    "NOMBREVEND":"TOTAL"
+    "VENDEDOR":"TOTAL"
 })
 
 # print(df_facCliDet.tail())
@@ -153,11 +153,11 @@ ARGS:
     return resultado
 
 df_facCliDet_Estilo = estiladorVtaTitulo(df_facCliDet
-    , ["TOTAL_DEUDA","SALDO_CUENTA","REMPENDFACT"]
+    , ["DEUDA TOTAL","DEUDA FACTURADA","DEUDA REMITADA"]
     , "DEUDORES CON SALDO MAYOR A $400.000"
 )
 df_facCliPorVend_Estilo = estiladorVtaTitulo(df_facCliPorVend
-    , ["TOTAL_DEUDA","SALDO_CUENTA","REMPENDFACT"]
+    , ["DEUDA TOTAL","DEUDA FACTURADA","DEUDA REMITADA"]
     , "DEUDAS MAYORES A $400.000 POR VENDEDOR"
 )
 
