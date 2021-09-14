@@ -42,10 +42,12 @@ try:
         PWD="+ password
     )
 except Exception as e:
-    print("Ocurrió un error al conectar a SQL Server: ", e)
+    listaErrores = e.args[1].split(".")
+    print("\nOcurrió un error al conectar a SQL Server:")
+    for i in listaErrores:
+        print(i)
+    print("")
     exit()
-
-cursor = db_conex.cursor()
 
 ############
 #   Sample Query
