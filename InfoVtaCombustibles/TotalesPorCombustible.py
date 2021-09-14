@@ -204,15 +204,15 @@ df_resultadosGNC = df_resultadosGNC.fillna({"UEN":"TOTAL"})
 # STYLING of the dataframe
 ##############
 
-def estiladorVtaTitulo(df,columnaValores):
+def estiladorVtaTitulo(df,listaColNumericas):
     resultado = df.style \
-        .format("{0:,.0f}", subset=[columnaValores]) \
+        .format("{0:,.0f}", subset=listaColNumericas) \
         .hide_index() \
         .set_caption("VOLUMEN DE VENTAS"
             +"\n"
             +((tiempoInicio-pd.to_timedelta(1,"days")).strftime("%d/%m/%y"))
         ) \
-        .set_properties(subset=[columnaValores]
+        .set_properties(subset=listaColNumericas
             , **{"text-align": "center", "width": "100px"}) \
         .set_properties(border= "2px solid black") \
         .set_table_styles([
@@ -238,11 +238,11 @@ def estiladorVtaTitulo(df,columnaValores):
             , axis=1)
     return resultado
 
-def estiladorVtaSinTitulo(df,columnaValores):
+def estiladorVtaSinTitulo(df,listaColNumericas):
     resultado = df.style \
-        .format("{0:,.0f}", subset=[columnaValores]) \
+        .format("{0:,.0f}", subset=listaColNumericas) \
         .hide_index() \
-        .set_properties(subset=[columnaValores]
+        .set_properties(subset=listaColNumericas
             , **{"text-align": "center", "width": "100px"}) \
         .set_properties(border= "2px solid black") \
         .set_table_styles([
@@ -262,9 +262,9 @@ def estiladorVtaSinTitulo(df,columnaValores):
             , axis=1)
     return resultado
 
-df_resultadosGOEU_Estilo = estiladorVtaSinTitulo(df_resultadosGOEU, "GASÓLEOS")
-df_resultadosNSNU_Estilo = estiladorVtaTitulo(df_resultadosNSNU, "NAFTAS")
-df_resultadosGNC_Estilo = estiladorVtaSinTitulo(df_resultadosGNC, "GNC")
+df_resultadosGOEU_Estilo = estiladorVtaSinTitulo(df_resultadosGOEU,["GASÓLEOS"])
+df_resultadosNSNU_Estilo = estiladorVtaTitulo(df_resultadosNSNU,["NAFTAS"])
+df_resultadosGNC_Estilo = estiladorVtaSinTitulo(df_resultadosGNC,["GNC"])
 
 
 # NOTE: display() will show styler object in Jupyter
