@@ -16,13 +16,24 @@ from telegram.ext import CallbackQueryHandler, CallbackContext
 
 from functools import wraps
 
+#####//////////////######
+# BOT Token selection for testing:
+# 0 = RUMAOS_Info_bot
+# 1 = RUMAOStest_bot
+mode = 0
+if mode == 1:
+    token = testbot_token
+    print("//////////","USANDO TEST BOT","//////////")
+else:
+    token = bot_token
+######//////////////######
 
 #####//////////////######
 # Where to find the report image files of:
-# "Info_Morosos.png"
-# "Info_VolumenVentas.png"
+# "Info_Morosos.png", "Info_VolumenVentas.png", etc
 filePath_Info_Morosos = "C:\Informes\InfoMorosos\\"
 filePath_InfoVtaComb = "C:\Informes\InfoVtaCombustibles\\"
+filePath_InfoGrandesDeudas = "C:\Informes\InfoDeuda\\"
 ######//////////////######
 
 
@@ -59,7 +70,9 @@ def send_action(action):
     def decorator(func):
         @wraps(func)
         def command_func(update, context, *args, **kwargs):
-            context.bot.send_chat_action(chat_id=update.effective_message.chat_id, action=action)
+            context.bot.send_chat_action(update.effective_message.chat_id
+                , action
+            )
             return func(update, context,  *args, **kwargs)
         return command_func
     
@@ -71,14 +84,16 @@ def start(update, context) -> None:
     # This will create inline buttons
     keyboard = [
         [
-            InlineKeyboardButton("Info Morosos"
-                , callback_data="Info Morosos")
+            InlineKeyboardButton("Info Deudas"
+                , callback_data="Info Deudas")
             , InlineKeyboardButton("Volumen Ventas Ayer"
                 , callback_data="Volumen Ventas Ayer")
         ]
         , [
             InlineKeyboardButton("Reset Info Morosos"
                 , callback_data="Reset Info Morosos")
+            , InlineKeyboardButton("Info Morosos"
+                , callback_data="Info Morosos")
         ]
         , [
             InlineKeyboardButton("Salir"
@@ -117,8 +132,23 @@ def button(update, context) -> None:
                 )
             )
         except:  
-            # The module use an exit exception, this will catch it and every 
-            # other exception
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
+
+    elif query.data == "Info Deudas":
+        try:
+            run_path(filePath_InfoGrandesDeudas+"GrandesDeudas.py")
+            query.bot.send_photo(update.effective_chat.id
+                , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudores.png"
+                , "rb"
+                )
+            )
+            query.bot.send_photo(update.effective_chat.id
+                , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudasPorVend.png"
+                , "rb"
+                )
+            )
+        except:  
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
 
@@ -158,7 +188,7 @@ def unknown(update, context):
 def main() -> None:
     """Run the bot."""
     # Create the Updater and pass your bot token.
-    updater = Updater(bot_token)
+    updater = Updater(token)
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CommandHandler(["start", "informes"], start))
     dispatcher.add_handler(CallbackQueryHandler(button))
