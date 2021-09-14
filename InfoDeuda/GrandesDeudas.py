@@ -25,7 +25,7 @@ try:
         SERVER="+login[0]+";\
         DATABASE="+login[1]+";\
         UID="+login[2]+";\
-        PWD="+ login[2]
+        PWD="+ login[3]
     )
 except Exception as e:
     listaErrores = e.args[1].split(".")
