@@ -205,5 +205,5 @@ df_to_image(df_facCliPorVend_Estilo, ubicacion, nombreFacCliPorVend)
 
 # Timer
 tiempoFinal = pd.to_datetime("today")
-print("\nInfo Volumen de Ventas"+"\nTiempo de Ejecucion Total:")
+print("\nInfo Grandes Deudas"+"\nTiempo de Ejecucion Total:")
 print(tiempoFinal-tiempoInicio)
