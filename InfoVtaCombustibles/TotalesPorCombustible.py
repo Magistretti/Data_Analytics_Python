@@ -204,7 +204,15 @@ df_resultadosGNC = df_resultadosGNC.fillna({"UEN":"TOTAL"})
 # STYLING of the dataframe
 ##############
 
-def estiladorVtaTitulo(df,listaColNumericas):
+def estiladorVtaTitulo(df,listaColNumericas,titulo):
+    """
+This function will return a styled dataframe that must be assign to a variable.
+ARGS:
+    df: Dataframe that will be styled.
+    listaColNumericas: List of numeric columns that will be formatted with
+    zero decimals and thousand separator.
+    titulo: String for the table caption.
+    """
     resultado = df.style \
         .format("{0:,.0f}", subset=listaColNumericas) \
         .hide_index() \
@@ -262,9 +270,16 @@ def estiladorVtaSinTitulo(df,listaColNumericas):
             , axis=1)
     return resultado
 
-df_resultadosGOEU_Estilo = estiladorVtaSinTitulo(df_resultadosGOEU,["GASÓLEOS"])
-df_resultadosNSNU_Estilo = estiladorVtaTitulo(df_resultadosNSNU,["NAFTAS"])
-df_resultadosGNC_Estilo = estiladorVtaSinTitulo(df_resultadosGNC,["GNC"])
+df_resultadosGOEU_Estilo = estiladorVtaSinTitulo(df_resultadosGOEU
+    ,["GASÓLEOS"]
+)
+df_resultadosNSNU_Estilo = estiladorVtaTitulo(df_resultadosNSNU
+    ,["NAFTAS"]
+    , "VOLUMEN DE VENTAS"
+)
+df_resultadosGNC_Estilo = estiladorVtaSinTitulo(df_resultadosGNC
+    ,["GNC"]
+)
 
 
 # NOTE: display() will show styler object in Jupyter
