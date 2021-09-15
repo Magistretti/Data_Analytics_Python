@@ -6,6 +6,7 @@
 
 from DatosTelegram import id_Autorizados, bot_token, testbot_token
 from runpy import run_path
+import datetime as dt
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -121,14 +122,16 @@ def button(update, context) -> None:
     if query.data == "Info Morosos":
         query.bot.send_photo(update.effective_chat.id
             , open(filePath_Info_Morosos+"Info_Morosos.png"
-                , "rb"))
+                , "rb"
+            )
+        )
 
     elif query.data == "Volumen Ventas Ayer":
         try:
             run_path(filePath_InfoVtaComb+"TotalesPorCombustible.py")
             query.bot.send_photo(update.effective_chat.id
                 , open(filePath_InfoVtaComb+"Info_VolumenVentas.png"
-                , "rb"
+                    , "rb"
                 )
             )
         except:  
@@ -140,12 +143,12 @@ def button(update, context) -> None:
             run_path(filePath_InfoGrandesDeudas+"GrandesDeudas.py")
             query.bot.send_photo(update.effective_chat.id
                 , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudores.png"
-                , "rb"
+                    , "rb"
                 )
             )
             query.bot.send_photo(update.effective_chat.id
                 , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudasPorVend.png"
-                , "rb"
+                    , "rb"
                 )
             )
         except:  
@@ -185,6 +188,58 @@ def unknown(update, context):
         +"¿Necesitas /ayuda?")
 
 
+destinatarios = [id_Autorizados[1], id_Autorizados[2]]
+
+def envio_automatico(context):
+    try:
+        run_path(filePath_Info_Morosos+"DeudaClientes.py")
+        print("Info Morosos reseteado")
+    except:
+        context.bot.send_message(id_Autorizados[0]
+            , print("Error al resetear Info Morosos")
+        )
+    try:
+        run_path(filePath_InfoVtaComb+"TotalesPorCombustible.py")
+        print("Info TotalesPorCombustible reseteado")
+    except:
+        context.bot.send_message(id_Autorizados[0]
+            , print("Error al resetear Info TotalesPorCombustible")
+        )
+    try:
+        run_path(filePath_InfoGrandesDeudas+"GrandesDeudas.py")
+        print("Info GrandesDeudas reseteado")
+    except:
+        context.bot.send_message(id_Autorizados[0]
+            , print("Error al resetear Info GrandesDeudas")
+        )
+
+    fechahoy = dt.datetime.now().strftime("%d/%m/%y")
+
+    for ids in destinatarios:
+        context.bot.send_message(ids, text="INFORMES AUTOMÁTICOS " + fechahoy)
+        context.bot.send_photo(
+            ids
+            , open(filePath_InfoVtaComb+"Info_VolumenVentas.png", "rb")
+            , "Venta Total por Combustible de Ayer"
+        )
+        context.bot.send_photo(
+            ids
+            , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudores.png", "rb")
+            , "Grandes Deudas"
+        )
+        context.bot.send_photo(
+            ids
+            , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudasPorVend.png"
+                , "rb")
+            , "Grandes Deudas por Vendedor"
+        )
+        context.bot.send_photo(
+            ids
+            , open(filePath_Info_Morosos+"Info_Morosos.png", "rb")
+            , "Morosos"
+        )
+
+
 def main() -> None:
     """Run the bot."""
     # Create the Updater and pass your bot token.
@@ -198,6 +253,19 @@ def main() -> None:
     # MUST BE AT THE END OF THE HANDLERS!!!!!
     unknown_handler = MessageHandler(Filters.command, unknown)
     dispatcher.add_handler(unknown_handler)
+
+
+    ############# TASKs ############
+
+    # updater.job_queue.run_repeating(callback_minute, interval=60, first=10)
+    # updater.job_queue.run_once(envio_automatico, 15)
+
+    updater.job_queue.run_daily(envio_automatico
+        , dt.time(12,0,0) # this time is in UTC = ARG time +3 hours
+        , name="info_diario"
+    )
+
+    ############# /TASKs ############
 
     # Start the Bot
     updater.start_polling()
