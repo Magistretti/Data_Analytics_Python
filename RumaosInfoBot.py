@@ -5,8 +5,12 @@
 ##########################
 
 from DatosTelegram import id_Autorizados, bot_token, testbot_token
+from DatosTelegram import testrumaos, rumaos_info
 from runpy import run_path
 import datetime as dt
+import pytz
+argTime = pytz.timezone('America/Argentina/Salta')
+
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -21,12 +25,15 @@ from functools import wraps
 # BOT Token selection for testing:
 # 0 = RUMAOS_Info_bot
 # 1 = RUMAOStest_bot
-mode = 0
-if mode == 1:
+MODE = 0
+
+if MODE == 1:
     token = testbot_token
+    destinatarios = [testrumaos]
     print("//////////","USANDO TEST BOT","//////////")
 else:
     token = bot_token
+    destinatarios = [rumaos_info]
 ######//////////////######
 
 #####//////////////######
@@ -55,6 +62,21 @@ def restricted(func):
     def wrapped(update, context, *args, **kwargs):
         user_id = update.effective_user.id
         if user_id not in id_Autorizados:
+            print("Unauthorized user, access denied for ID {}".format(user_id))
+            update.message.reply_text("USUARIO NO AUTORIZADO")
+            return
+        return func(update, context, *args, **kwargs)
+    return wrapped
+
+
+def developerOnly(func):
+    """
+        This decorator will grant function access only to the developer
+    """
+    @wraps(func)
+    def wrapped(update, context, *args, **kwargs):
+        user_id = update.effective_user.id
+        if user_id not in [id_Autorizados[0]]:
             print("Unauthorized user, access denied for ID {}".format(user_id))
             update.message.reply_text("USUARIO NO AUTORIZADO")
             return
@@ -187,10 +209,70 @@ def unknown(update, context):
     , text="Disculpa, no entendí ese comando\n"
         +"¿Necesitas /ayuda?")
 
+@developerOnly
+def set_envioDiario(update, context) -> None:
+    try:
+        # Parse time of what is written in chat command
+        horario = dt.datetime.strptime(context.args[0], "%H:%M")
+        horario_tz = argTime.localize(horario).timetz() # Apply ARG timezone
+        
+        # Remove old job to update time
+        job_removed = remove_job_if_exists("info_diario", context)
 
-destinatarios = [id_Autorizados[1], id_Autorizados[2]]
+        # Setting daily task       
+        context.job_queue.run_daily(envio_automatico
+            , horario_tz
+            , name="info_diario"
+        )
 
+        text = "Informe Diario seteado!"
+        if job_removed:
+            text = text + " Horario de envío actualizado."
+
+        update.message.reply_text(text)
+
+    except:
+        update.message.reply_text("Escribir hora y minutos: /set HH:MM")
+
+
+# def tareas(update,context) -> None:
+#     """ Send a list of scheduled jobs to the console 
+#  ----------> NEED IMPROVEMENT to be send to chat <----------
+#     """
+#     context.job_queue.print_PTB_jobs()
+
+
+def remove_job_if_exists(name, context) -> bool:
+    """Remove job with given name. Returns whether job was removed."""
+    current_jobs = context.job_queue.get_jobs_by_name(name)
+    if not current_jobs:
+        return False
+    for job in current_jobs:
+        job.schedule_removal()
+    return True
+
+@developerOnly
+def unset(update, context) -> None:
+    """Remove the job if the user changed their mind."""
+    task = context.args[0]
+    job_removed = remove_job_if_exists(task, context)
+    if job_removed:
+        text = "Timer successfully cancelled!"
+    else:
+        text= "You have no active timer."
+    update.message.reply_text(text)
+
+
+# Trigger envio_automatico in 10 sec
+@developerOnly
+def forzar_envio(update, context) -> None:
+    update.message.reply_text("Enviando informes al canal en 10 seg")
+    context.job_queue.run_once(envio_automatico, 60, name="envio_forzado")
+
+
+# Reset all reports and send them to the designated channel
 def envio_automatico(context):
+    print("\n->Comenzando generación de informes<-")
     try:
         run_path(filePath_Info_Morosos+"DeudaClientes.py")
         print("Info Morosos reseteado")
@@ -238,6 +320,7 @@ def envio_automatico(context):
             , open(filePath_Info_Morosos+"Info_Morosos.png", "rb")
             , "Morosos"
         )
+    print("")
 
 
 def main() -> None:
@@ -248,6 +331,10 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler(["start", "informes"], start))
     dispatcher.add_handler(CallbackQueryHandler(button))
     dispatcher.add_handler(CommandHandler(["help","ayuda"], help_command))
+    dispatcher.add_handler(CommandHandler(["forzar_envio"], forzar_envio))
+    dispatcher.add_handler(CommandHandler(["set"], set_envioDiario))
+    dispatcher.add_handler(CommandHandler(["unset"], unset))
+    # dispatcher.add_handler(CommandHandler(["tareas"], tareas))
 
     # Listening for wrong or unknown commands
     # MUST BE AT THE END OF THE HANDLERS!!!!!
@@ -261,7 +348,7 @@ def main() -> None:
     # updater.job_queue.run_once(envio_automatico, 15)
 
     updater.job_queue.run_daily(envio_automatico
-        , dt.time(12,0,0) # this time is in UTC = ARG time +3 hours
+        , dt.time(8,30,0,tzinfo=argTime) 
         , name="info_diario"
     )
 
