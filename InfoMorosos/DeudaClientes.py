@@ -49,48 +49,37 @@ except Exception as e:
     print("")
     exit()
 
-############
-#   Sample Query
-# cursor.execute("SELECT * FROM [Rumaos].[dbo].[Mail]")
-# row = cursor.fetchone()
-# while row:
-#     print(row[1])
-#     row = cursor.fetchone()
-#
-# df_mail = pd.read_sql("SELECT * FROM [Rumaos].[dbo].[Mail]",db_conex)
-# print(df_mail)
-############
 
 #########
-# Table "Clientes condicion especial.xlsx" not needed anymore
-    #
-    # Convert Excel file "Clientes condicion especial.xlsx" to a Dataframe
-    #
-    # Requirements:
-    # -Filter unused columns
-    # -Drop rows with NaNs in "Condición del cliente" column
-    #########
+# Table "Clientes condicion especial.xlsx" NOT NEEDED ANYMORE
+#
+# Convert Excel file "Clientes condicion especial.xlsx" to a Dataframe
+#
+# Requirements:
+# -Filter unused columns
+# -Drop rows with NaNs in "Condición del cliente" column
+#########
 
-    # df_condicionCliente = pd.read_excel("C:/Users/gpedro/OneDrive - RedMercosur/"
-    #     "Consultas Power BI/TABLERO SGES VS SGFIN/"
-    #     "Clientes condicion especial.xlsx",
-    #     usecols="B,I")
+# df_condicionCliente = pd.read_excel("C:/Users/gpedro/OneDrive - RedMercosur/"
+#     "Consultas Power BI/TABLERO SGES VS SGFIN/"
+#     "Clientes condicion especial.xlsx",
+#     usecols="B,I")
 
-    # df_condicionCliente["NROCLIPRO"] = \
-    #     df_condicionCliente["NROCLIPRO"].astype("string")
+# df_condicionCliente["NROCLIPRO"] = \
+#     df_condicionCliente["NROCLIPRO"].astype("string")
 
-    # df_condicionCliente.dropna(subset=["Condición del cliente"], inplace=True)
+# df_condicionCliente.dropna(subset=["Condición del cliente"], inplace=True)
 
-    #print(df_condicionCliente)
+#print(df_condicionCliente)
 
-    #########
-    # Left Outer Merge of df_cuentasDeudoras with df_condicionCliente to add 
-    # "Condición del cliente" column to df_cuentasDeudoras
-    #########
+#########
+# Left Outer Merge of df_cuentasDeudoras with df_condicionCliente to add 
+# "Condición del cliente" column to df_cuentasDeudoras
+#########
 
-    # df_cuentasDeudoras = df_cuentasDeudoras.merge(right=df_condicionCliente,
-    #     how="left", on="NROCLIPRO")
-    # df_cuentasDeudoras.info()
+# df_cuentasDeudoras = df_cuentasDeudoras.merge(right=df_condicionCliente,
+#     how="left", on="NROCLIPRO")
+# df_cuentasDeudoras.info()
 
 
 #########
@@ -112,26 +101,8 @@ df_cuentasDeudoras = pd.read_sql("""
     SELECT 
         CAST(FacCli.[NROCLIPRO] AS VARCHAR) as NROCLIENTE
         ,FacCli.[NOMBRE]
-        ,FacCli.[DOMICILIO]
-        ,FacCli.[LOCALIDAD]
-        ,FacCli.[PROVINCIA]
-        ,FacCli.[TELEFONO]
-        ,FacCli.[EMAIL]
-        ,FacCli.[TIPOIVA]
-        ,FacCli.[CUITDOC]
-        ,CAST(FacCli.[CODFORPAGO] AS VARCHAR) as CODFORPAGO
-        ,FacCli.[FEULTVTASQL]
-        ,FacCli.[SALDOPREPAGO]
-        ,FacCli.[SALDOREMIPENDFACTU]
         ,FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU as SALDOCUENTA
-        ,FacCli.[TARJETA]
-        ,FacCli.[TIPOCOMPCC]
-        ,CAST(FacCli.[BLOQUEADO] AS VARCHAR) as BLOQUEADO
-        ,FacCli.[LIMITECREDITO]
-        ,Vendedores.[NOMBREVEND]
-        ,FacCli.[ListaSaldoCC]
-    FROM [Rumaos].[dbo].[FacCli]
-    left outer join Vendedores On FacCli.NROVEND = Vendedores.NROVEND
+    FROM [Rumaos].[dbo].[FacCli] WITH (NOLOCK)
     where ListaSaldoCC = 1
         and FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU < -100;
 """, db_conex)
@@ -156,24 +127,12 @@ fechaAñoAtras = (tiempoInicio - pd.Timedelta(365, unit="d"))\
 
 df_remitos = pd.read_sql("""
     SELECT 
-        FacRemDet.[UEN]
-        ,FacRemDet.[FECHASQL]
-        ,FacRemDet.[TURNO]
-        ,cast(FacRemDet.[PTOVTA] AS VARCHAR) as PTOVTA
-        ,cast(FacRemDet.[NROREMITO] AS VARCHAR) as NROREMITO
+        FacRemDet.[FECHASQL]
         ,cast(FacRemDet.[NROCLIENTE] AS VARCHAR) as NROCLIENTE
         ,FacCli.[NOMBRE]
-        ,FacRemDet.[CODPRODUCTO]
-        ,FacRemDet.[CANTIDAD]
-        ,FacRemDet.[PXUNINETO]
-        ,FacRemDet.[IMPINT]
-        ,FacRemDet.[IMPIVA]
-        ,FacRemDet.[PXUNITARIO]
         ,FacRemDet.[IMPORTE]
-        ,FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU as SALDOCUENTA
-        ,FacCli.[ListaSaldoCC]
-    FROM [Rumaos].[dbo].[FacRemDet]
-    Left Outer Join FacCli on FacRemDet.NROCLIENTE = FacCli.NROCLIPRO
+    FROM [Rumaos].[dbo].[FacRemDet] WITH (NOLOCK)
+    Left Outer Join FacCli WITH (NOLOCK) on FacRemDet.NROCLIENTE = FacCli.NROCLIPRO
     where FECHASQL >= """+fechaAñoAtras+"""
         and ListaSaldoCC = 1
         and FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU < -100
@@ -183,6 +142,10 @@ df_remitos = pd.read_sql("""
 df_remitos = df_remitos.convert_dtypes()
 #df_remitos.info()
 
+# Timer
+tiempoFinal = pd.to_datetime("today")
+print("\nInfo Morosos"+"\nTiempo de Ejecucion Total:")
+print(tiempoFinal-tiempoInicio)
 
 ############
 # -Get the first date, last date and the sum of IMPORTE of each client in 
