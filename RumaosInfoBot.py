@@ -18,6 +18,7 @@ from telegram import ChatAction
 from telegram.ext import Updater, CommandHandler
 from telegram.ext import MessageHandler, Filters 
 from telegram.ext import CallbackQueryHandler, CallbackContext
+from telegram.ext import Defaults
 
 from functools import wraps
 
@@ -197,9 +198,15 @@ def button(update, context) -> None:
 
 # Show info on how to use the bot
 def help_command(update, context) -> None:
-    update.message.reply_text("Comandos:\n"
-        +"/start o /informes para iniciar consulta.\n"
-        +"/help o /ayuda para mostrar esta información."
+    update.message.reply_text(
+        "->Comandos Públicos:\n"
+        +"/help o /ayuda -> Muestra esta información.\n"
+        +"->Comandos Restringidos:\n"
+        +"/start o /informes -> Inicia consulta.\n"
+        +"->Comandos Desarrollador:\n"
+        +"/set (HH:MM) -> Define horario del informe diario.\n"
+        +"/unset info_diario -> Detiene envío del informe diario.\n"
+        +"/forzar_envio -> Activa el informe diario en 10seg"
     )
 
 
@@ -232,7 +239,7 @@ def set_envioDiario(update, context) -> None:
         update.message.reply_text(text)
 
     except:
-        update.message.reply_text("Escribir hora y minutos: /set HH:MM")
+        update.message.reply_text("Escribir hora y minutos: /set (HH:MM)")
 
 
 # def tareas(update,context) -> None:
@@ -254,20 +261,23 @@ def remove_job_if_exists(name, context) -> bool:
 @developerOnly
 def unset(update, context) -> None:
     """Remove the job if the user changed their mind."""
-    task = context.args[0]
-    job_removed = remove_job_if_exists(task, context)
-    if job_removed:
-        text = "Timer successfully cancelled!"
-    else:
-        text= "You have no active timer."
-    update.message.reply_text(text)
-
+    try:
+        task = context.args[0]
+        job_removed = remove_job_if_exists(task, context)
+        if job_removed:
+            text = "Tarea " + task + " ha sido cancelada!"
+        else:
+            text= "No hay tarea programada con ese nombre."
+        update.message.reply_text(text)
+    except:
+        update.message.reply_text(
+            "Escribir nombre de la tarea: /unset (nombre_Tarea)")
 
 # Trigger envio_automatico in 10 sec
 @developerOnly
 def forzar_envio(update, context) -> None:
     update.message.reply_text("Enviando informes al canal en 10 seg")
-    context.job_queue.run_once(envio_automatico, 60, name="envio_forzado")
+    context.job_queue.run_once(envio_automatico, 10, name="envio_forzado")
 
 
 # Reset all reports and send them to the designated channel
@@ -325,12 +335,17 @@ def envio_automatico(context):
 
 def main() -> None:
     """Run the bot."""
+    defaults = Defaults(tzinfo=argTime)
+
     # Create the Updater and pass your bot token.
-    updater = Updater(token)
+    updater = Updater(token, defaults=defaults)
     dispatcher = updater.dispatcher
-    dispatcher.add_handler(CommandHandler(["start", "informes"], start))
-    dispatcher.add_handler(CallbackQueryHandler(button))
-    dispatcher.add_handler(CommandHandler(["help","ayuda"], help_command))
+    dispatcher.add_handler(CommandHandler(["start", "informes"], start
+        , run_async=True))
+    dispatcher.add_handler(CallbackQueryHandler(button
+        , run_async=True))
+    dispatcher.add_handler(CommandHandler(["help","ayuda"], help_command
+        , run_async=True))
     dispatcher.add_handler(CommandHandler(["forzar_envio"], forzar_envio))
     dispatcher.add_handler(CommandHandler(["set"], set_envioDiario))
     dispatcher.add_handler(CommandHandler(["unset"], unset))
@@ -338,7 +353,8 @@ def main() -> None:
 
     # Listening for wrong or unknown commands
     # MUST BE AT THE END OF THE HANDLERS!!!!!
-    unknown_handler = MessageHandler(Filters.command, unknown)
+    unknown_handler = MessageHandler(Filters.command, unknown
+        , run_async=True)
     dispatcher.add_handler(unknown_handler)
 
 
