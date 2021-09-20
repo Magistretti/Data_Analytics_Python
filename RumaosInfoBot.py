@@ -365,7 +365,7 @@ def main() -> None:
     # updater.job_queue.run_once(envio_automatico, 15)
 
     updater.job_queue.run_daily(envio_automatico
-        , dt.time(8,30,0,tzinfo=argTime) 
+        , dt.time(8,45,0,tzinfo=argTime) 
         , name="info_diario"
     )
 
