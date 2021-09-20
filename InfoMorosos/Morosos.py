@@ -142,10 +142,6 @@ df_remitos = pd.read_sql("""
 df_remitos = df_remitos.convert_dtypes()
 #df_remitos.info()
 
-# Timer
-tiempoFinal = pd.to_datetime("today")
-print("\nInfo Morosos"+"\nTiempo de Ejecucion Total:")
-print(tiempoFinal-tiempoInicio)
 
 ############
 # -Get the first date, last date and the sum of IMPORTE of each client in 
