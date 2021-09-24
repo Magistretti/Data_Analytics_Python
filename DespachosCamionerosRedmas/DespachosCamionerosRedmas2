@@ -1,0 +1,146 @@
+###################################
+#
+#     INFORME Primer Despacho por Activación
+#             (CAMIONEROS)
+#               21/09/21
+###################################
+
+import mysql.connector
+from mysql.connector import Error
+from pandas.core.reshape.pivot import pivot_table
+import pyodbc
+from DatosLogin import login, loginMySQL
+
+import pandas as pd
+
+tiempoInicio = pd.to_datetime("today")
+
+
+def conectorMySQL(datos):
+    """
+    This function will create a connection to a MySQL Server, should be 
+    provided with a list with the following strings in this exact order:
+        datos=["host","port","database","user","password"]
+    """
+    try:
+        conexMySQL = mysql.connector.connect(
+            host=datos[0]
+            ,port=datos[1]
+            ,database=datos[2]
+            ,user=datos[3]
+            ,password=datos[4]
+        )
+        if conexMySQL.is_connected():
+            db_Info = conexMySQL.get_server_info()
+            print("\nConnected to MySQL Server version ", db_Info)
+            cursor = conexMySQL.cursor()
+            cursor.execute("select database();")
+            record = cursor.fetchone()
+            print("You're connected to database:", record)
+            cursor.close()
+            return conexMySQL
+            
+    except Error as e:
+        print("\nError while connecting to MySQL", e)
+
+
+def conectorMicroSQL(datos):
+    """
+    This function will create a connection to a Microsoft SQL Server, should 
+    be provided with a list with the following strings in this exact order:
+        datos=["server","database","username","password"]
+    """
+    try:
+        conexMicroSQL = pyodbc.connect(
+            "DRIVER={ODBC Driver 17 for SQL Server};\
+            SERVER="+datos[0]+";\
+            DATABASE="+datos[1]+";\
+            UID="+datos[2]+";\
+            PWD="+ datos[3]
+        )
+        print("\nConnected to server:", datos[0])
+        print("Database:", datos[1])
+        print("")
+        return conexMicroSQL
+
+    except Exception as e:
+        listaErrores = e.args[1].split(".")
+        print("\nOcurrió un error al conectar a SQL Server:")
+        for i in listaErrores:
+            print(i)
+        print("")
+
+# Create database connections
+conexMySQL = conectorMySQL(loginMySQL)
+conexMicroSQL = conectorMicroSQL(login)
+
+
+# Extracting all the cards numbers that had been activated in the last 92 days 
+# and belong to truckers
+df_tarj_camion = pd.read_sql("""
+    SELECT 
+        users.tarjeta as 'TARJETA'      
+    FROM red_mas_prod.users
+    where users.tarjeta like 'ig%'
+        #and users.category = '17'
+        and register_app_at >= cast(date_add(now(), INTERVAL -92 DAY) as date)
+""", conexMySQL)
+
+df_tarj_camion = df_tarj_camion.convert_dtypes()
+df_tarj_camion["TARJETA"] = df_tarj_camion["TARJETA"].str.strip()
+
+
+# Extracting all the cards numbers that had been used for the first time 
+# yesterday and belong to certain UENs
+df_1era_carga =  pd.read_sql("""
+    SELECT
+        D.TARJETA
+        , MAX(d.UEN) as UEN
+        , MIN(FECHADESPSQL) as 'F.DESPACHO'
+    FROM [Rumaos].[dbo].[VIEW_DESPAPRO_FILTRADA] as D
+        join GDM_SRV.dbo.Cliente as GDM_C on D.TARJETA = GDM_C.TARJETA
+    where D.TARJETA like 'ig%'
+        and D.UEN IN ('MERC GUAYMALLEN','MERCADO 2','MITRE','PERDRIEL','PERDRIEL2','PUENTE OLIVE')
+        and GDM_C.Categoria = '17'
+        and GDM_C.FechaAlta >= DATEADD(day, -92, CAST(GETDATE() AS date))
+    GROUP BY D.TARJETA
+    HAVING (CAST(MIN(FECHADESPSQL) AS date) = DATEADD(day, -1, CAST(GETDATE() AS date)))
+""", conexMicroSQL)
+
+df_1era_carga = df_1era_carga.convert_dtypes()
+df_1era_carga["UEN"] = df_1era_carga["UEN"].str.strip()
+df_1era_carga["TARJETA"] = df_1era_carga["TARJETA"].str.strip()
+
+
+# Inner merge of "df_1era_carga" and "df_tarj_camion" to get the truckers cards 
+# activated in the last 92 days and used for the first time yesterday
+df_1era_carga_camion = pd.merge(
+    df_1era_carga,
+    df_tarj_camion,
+    on="TARJETA"
+)
+
+
+pivot_1era_carga_camion = pd.pivot_table(df_1era_carga_camion
+    , values="TARJETA"
+    , index="UEN"
+    , aggfunc="count"
+)
+
+pivot_1era_carga_camion = pivot_1era_carga_camion.reset_index()
+print(pivot_1era_carga_camion)
+
+
+
+# Timer
+tiempoFinal = pd.to_datetime("today")
+print("\nInfo 1er Despacho Tarj Camionero"+"\nTiempo de Ejecucion Total:")
+print(tiempoFinal-tiempoInicio)
+
+
+if __name__ == "__main__":
+    print("Nada por aquí")
+    # Timer
+    tiempoFinal = pd.to_datetime("today")
+    print("\nInfo 1er Despacho Tarj Camionero"+"\nTiempo de Ejecucion Total:")
+    print(tiempoFinal-tiempoInicio)  
