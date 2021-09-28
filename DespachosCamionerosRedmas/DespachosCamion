@@ -7,7 +7,6 @@
 
 import mysql.connector
 from mysql.connector import Error
-from pandas.core.reshape.pivot import pivot_table
 import pyodbc
 from DatosLogin import login, loginMySQL
 
@@ -44,14 +43,14 @@ def conectorMySQL(datos):
         print("\nError while connecting to MySQL", e)
 
 
-def conectorMicroSQL(datos):
+def conectorMSSQL(datos):
     """
     This function will create a connection to a Microsoft SQL Server, should 
     be provided with a list with the following strings in this exact order:
         datos=["server","database","username","password"]
     """
     try:
-        conexMicroSQL = pyodbc.connect(
+        conexMSSQL = pyodbc.connect(
             "DRIVER={ODBC Driver 17 for SQL Server};\
             SERVER="+datos[0]+";\
             DATABASE="+datos[1]+";\
@@ -61,7 +60,7 @@ def conectorMicroSQL(datos):
         print("\nConnected to server:", datos[0])
         print("Database:", datos[1])
         print("")
-        return conexMicroSQL
+        return conexMSSQL
 
     except Exception as e:
         listaErrores = e.args[1].split(".")
@@ -72,7 +71,7 @@ def conectorMicroSQL(datos):
 
 # Create database connections
 conexMySQL = conectorMySQL(loginMySQL)
-conexMicroSQL = conectorMicroSQL(login)
+conexMSSQL = conectorMSSQL(login)
 
 
 # Extracting all the cards numbers that had been activated in the last 92 days 
@@ -92,7 +91,7 @@ df_tarj_camion["TARJETA"] = df_tarj_camion["TARJETA"].str.strip()
 
 # Extracting all the cards numbers that had been used for the first time 
 # yesterday and belong to certain UENs
-df_1era_carga =  pd.read_sql("""
+df_1era_carga = pd.read_sql("""
     SELECT
         D.TARJETA
         , MAX(d.UEN) as UEN
@@ -100,12 +99,19 @@ df_1era_carga =  pd.read_sql("""
     FROM [Rumaos].[dbo].[VIEW_DESPAPRO_FILTRADA] as D
         join GDM_SRV.dbo.Cliente as GDM_C on D.TARJETA = GDM_C.TARJETA
     where D.TARJETA like 'ig%'
-        and D.UEN IN ('MERC GUAYMALLEN','MERCADO 2','MITRE','PERDRIEL','PERDRIEL2','PUENTE OLIVE')
+        and D.UEN IN (
+            'MERC GUAYMALLEN'
+            ,'MERCADO 2'
+            ,'MITRE'
+            ,'PERDRIEL'
+            ,'PERDRIEL2'
+            ,'PUENTE OLIVE'
+        )
         and GDM_C.Categoria = '17'
         and GDM_C.FechaAlta >= DATEADD(day, -92, CAST(GETDATE() AS date))
     GROUP BY D.TARJETA
     HAVING (CAST(MIN(FECHADESPSQL) AS date) = DATEADD(day, -1, CAST(GETDATE() AS date)))
-""", conexMicroSQL)
+""", conexMSSQL)
 
 df_1era_carga = df_1era_carga.convert_dtypes()
 df_1era_carga["UEN"] = df_1era_carga["UEN"].str.strip()
@@ -128,13 +134,104 @@ pivot_1era_carga_camion = pd.pivot_table(df_1era_carga_camion
 )
 
 pivot_1era_carga_camion = pivot_1era_carga_camion.reset_index()
-print(pivot_1era_carga_camion)
+pivot_1era_carga_camion.rename(columns={"TARJETA":"ACTIVACIONES"},inplace=True)
+
+# Counting all the truckers purchases, of yesterday, that dont have an account
+df_despachos = pd.read_sql("""
+SELECT    
+    D.UEN
+	,COUNT(Distinct D.ID) as 'DESPACHOS'
+FROM [Rumaos].[dbo].[VIEW_DESPAPRO_FILTRADA] as D
+	join Rumaos.dbo.Fac001 as F on 
+		D.TIPOCOMP = F.TIPOCOMP
+		and D.LETRACOMP = F.LETRACOMP
+		and D.PTOVTA = F.PTOVTA
+		and D.NROCOMP = F.NROCOMP
+WHERE 
+    D.UEN IN (
+        'MERC GUAYMALLEN'
+        ,'MERCADO 2'
+        ,'MITRE'
+        ,'PERDRIEL'
+        ,'PERDRIEL2'
+        ,'PUENTE OLIVE'
+    )
+	and D.VOLUMEN >= '99'
+	and D.FECHASQL = DATEADD(day, -1, CAST(GETDATE() AS date))
+	and F.NROCLIPRO <= '99999' 
+GROUP BY D.UEN
+""", conexMSSQL)
+
+df_despachos["UEN"] = df_despachos["UEN"].str.strip()
 
 
+# Counting all the truckers purchases, of yesterday, that dont have an account
+df_despachosRedmas = pd.read_sql("""
+SELECT
+	D.UEN
+	,COUNT(Distinct D.ID) as 'DESPACHOS RED MAS'
+FROM [Rumaos].[dbo].[VIEW_DESPAPRO_FILTRADA] as D
+	LEFT OUTER join Rumaos.dbo.Fac001 as F on 
+		D.TIPOCOMP = F.TIPOCOMP
+		and D.LETRACOMP = F.LETRACOMP
+		and D.PTOVTA = F.PTOVTA
+		and D.NROCOMP = F.NROCOMP
+where D.TARJETA like 'i%'
+	and D.UEN IN (
+        'MERC GUAYMALLEN'
+        ,'MERCADO 2'
+        ,'MITRE'
+        ,'PERDRIEL'
+        ,'PERDRIEL2'
+        ,'PUENTE OLIVE'
+    )
+	and D.VOLUMEN >= '99'
+	and D.FECHASQL = DATEADD(day, -1, CAST(GETDATE() AS date))
+	and F.NROCLIPRO <= '99999'
+GROUP BY D.UEN
+""", conexMSSQL)
+
+df_despachosRedmas["UEN"] = df_despachosRedmas["UEN"].str.strip()
+
+
+# Merge "df_despachosRedmas" and "df_despachos"
+df_despachosCompleto = pd.merge(
+    df_despachosRedmas,
+    df_despachos,
+    on="UEN",
+    how="outer"
+)
+
+# Create column "Penetración RedMás" and insert it in position 1
+df_despachosCompleto.insert(
+    1
+    ,"Penetración RedMás"
+    ,df_despachosCompleto.apply(
+        lambda row: row["DESPACHOS RED MAS"]/row["DESPACHOS"]
+            , axis= 1
+    )
+)
+
+df_despachosCompleto = df_despachosCompleto.sort_values(
+    by=["Penetración RedMás"]
+    ,ascending=False
+)
+
+
+df_despachos_Y_Activ = pd.merge(
+    df_despachosCompleto,
+    pivot_1era_carga_camion,
+    on="UEN",
+    how="outer"
+)
+
+df_despachos_Y_Activ.fillna(value=0, inplace=True)
+
+print(df_despachos_Y_Activ)
 
 # Timer
 tiempoFinal = pd.to_datetime("today")
-print("\nInfo 1er Despacho Tarj Camionero"+"\nTiempo de Ejecucion Total:")
+print("\nInfo 1er Despachos Camioneros"+"\nTiempo de Ejecucion Total:")
 print(tiempoFinal-tiempoInicio)
 
 
@@ -142,5 +239,5 @@ if __name__ == "__main__":
     print("Nada por aquí")
     # Timer
     tiempoFinal = pd.to_datetime("today")
-    print("\nInfo 1er Despacho Tarj Camionero"+"\nTiempo de Ejecucion Total:")
+    print("\nInfo 1er Despachos Camionero"+"\nTiempo de Ejecucion Total:")
     print(tiempoFinal-tiempoInicio)  
