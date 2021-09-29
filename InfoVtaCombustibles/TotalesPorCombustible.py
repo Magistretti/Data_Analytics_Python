@@ -216,7 +216,7 @@ ARGS:
     resultado = df.style \
         .format("{0:,.0f}", subset=listaColNumericas) \
         .hide_index() \
-        .set_caption("VOLUMEN DE VENTAS"
+        .set_caption(titulo
             +"\n"
             +((tiempoInicio-pd.to_timedelta(1,"days")).strftime("%d/%m/%y"))
         ) \
