@@ -43,6 +43,7 @@ else:
 filePath_Info_Morosos = "C:\Informes\InfoMorosos\\"
 filePath_InfoVtaComb = "C:\Informes\InfoVtaCombustibles\\"
 filePath_InfoGrandesDeudas = "C:\Informes\InfoDeuda\\"
+filePath_Info_Despachos_Camioneros = "C:\Informes\DespachosCamionerosRedmas\\"
 ######//////////////######
 
 
@@ -305,6 +306,13 @@ def envio_automatico(context):
         context.bot.send_message(id_Autorizados[0]
             , print("Error al resetear Info GrandesDeudas")
         )
+    try:
+        run_path(filePath_Info_Despachos_Camioneros+"DespachosCamion.py")
+        print("Info Despachos_Camioneros reseteado")
+    except:
+        context.bot.send_message(id_Autorizados[0]
+            , print("Error al resetear Info Despachos_Camioneros")
+        )
 
     fechahoy = dt.datetime.now().strftime("%d/%m/%y")
 
@@ -329,6 +337,12 @@ def envio_automatico(context):
         context.bot.send_photo(
             ids
             , open(filePath_Info_Morosos+"Info_Morosos.png", "rb")
+            , "Morosos"
+        )
+        context.bot.send_photo(
+            ids
+            , open(filePath_Info_Despachos_Camioneros+
+                "Info_Despachos_Camioneros.png", "rb")
             , "Morosos"
         )
     print("")
@@ -365,7 +379,7 @@ def main() -> None:
     # updater.job_queue.run_once(envio_automatico, 15)
 
     updater.job_queue.run_daily(envio_automatico
-        , dt.time(8,45,0,tzinfo=argTime) 
+        , dt.time(11,0,0,tzinfo=argTime) 
         , name="info_diario"
     )
 
