@@ -285,34 +285,42 @@ def forzar_envio(update, context) -> None:
 # Reset all reports and send them to the designated channel
 def envio_automatico(context):
     print("\n->Comenzando generación de informes<-")
+
     try:
-        run_path(filePath_Info_Morosos+"Morosos.py")
+        run_path(filePath_Info_Morosos+"Moroso.py")
         print("Info Morosos reseteado")
     except:
         context.bot.send_message(id_Autorizados[0]
-            , print("Error al resetear Info Morosos")
+            , text="Error al resetear Info Morosos"
         )
+        print("Error al resetear Info Morosos")
+
     try:
         run_path(filePath_InfoVtaComb+"TotalesPorCombustible.py")
         print("Info TotalesPorCombustible reseteado")
     except:
         context.bot.send_message(id_Autorizados[0]
-            , print("Error al resetear Info TotalesPorCombustible")
+            , text="Error al resetear Info TotalesPorCombustible"
         )
+        print("Error al resetear Info TotalesPorCombustible")
+
     try:
         run_path(filePath_InfoGrandesDeudas+"GrandesDeudas.py")
         print("Info GrandesDeudas reseteado")
     except:
         context.bot.send_message(id_Autorizados[0]
-            , print("Error al resetear Info GrandesDeudas")
+            , text="Error al resetear Info GrandesDeudas"
         )
+        print("Error al resetear Info GrandesDeudas")        
+
     try:
         run_path(filePath_Info_Despachos_Camioneros+"DespachosCamion.py")
         print("Info Despachos_Camioneros reseteado")
     except:
         context.bot.send_message(id_Autorizados[0]
-            , print("Error al resetear Info Despachos_Camioneros")
+            , text="Error al resetear Info Despachos_Camioneros"
         )
+        print("Error al resetear Info Despachos_Camioneros")
 
     fechahoy = dt.datetime.now().strftime("%d/%m/%y")
 
