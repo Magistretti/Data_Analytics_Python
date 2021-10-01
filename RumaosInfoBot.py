@@ -37,7 +37,7 @@ else:
     destinatarios = [rumaos_info]
 ######//////////////######
 
-#####//////////////######
+######//////////////######
 # Where to find the report image files of:
 # "Info_Morosos.png", "Info_VolumenVentas.png", etc
 filePath_Info_Morosos = "C:\Informes\InfoMorosos\\"
@@ -351,7 +351,7 @@ def envio_automatico(context):
             ids
             , open(filePath_Info_Despachos_Camioneros+
                 "Info_Despachos_Camioneros.png", "rb")
-            , "Morosos"
+            , "Despachos Camioneros"
         )
     print("")
 
