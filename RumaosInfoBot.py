@@ -287,7 +287,7 @@ def envio_automatico(context):
     print("\n->Comenzando generación de informes<-")
 
     try:
-        run_path(filePath_Info_Morosos+"Moroso.py")
+        run_path(filePath_Info_Morosos+"Morosos.py")
         print("Info Morosos reseteado")
     except:
         context.bot.send_message(id_Autorizados[0]
