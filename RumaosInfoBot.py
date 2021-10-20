@@ -358,7 +358,7 @@ def envio_automatico(context):
 
 def main() -> None:
     """Run the bot."""
-    defaults = Defaults(tzinfo=argTime, timeout=10)
+    defaults = Defaults(tzinfo=argTime, timeout=20)
 
     # Create the Updater and pass your bot token.
     updater = Updater(token, defaults=defaults)
