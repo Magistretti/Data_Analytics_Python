@@ -1,6 +1,6 @@
 ###################################
 #
-#     INFORME Penetración RedMás
+#     INFORME Penetración RedMás AYER
 #             
 #               07/10/21
 ###################################
@@ -27,7 +27,7 @@ conexMSSQL = conectorMSSQL(login)
 
 
 ##########################################
-# Process "PENETRACIÓN" for "Líquidos"
+# Get yesterday "PENETRACIÓN" for "Líquidos"
 ##########################################
 
 df_desp_x_turno_liq = pd.read_sql(
@@ -35,20 +35,20 @@ df_desp_x_turno_liq = pd.read_sql(
         SELECT
             Despapro.UEN,
             Despapro.TURNO,
-            COUNT(Despapro.VOLUMEN) AS 'Despachos RedMas',
             (SELECT
-                COUNT(D.VOLUMEN) AS 'Despachos'
+                COUNT(D.VOLUMEN) AS 'Despachos RedMas'
             FROM Rumaos.dbo.Despapro as D
             WHERE D.uen = Despapro.uen
                 AND D.TURNO = Despapro.TURNO
-                AND	D.TARJETA NOT LIKE 'cc%'
+                AND	D.TARJETA like 'i%'
                 AND D.FECHASQL = DATEADD(DAY,-1,CAST(GETDATE() AS date))
                 AND D.VOLUMEN > '0'
                 AND D.CODPRODUCTO <> 'GNC'
             GROUP BY D.UEN ,D.TURNO
-            ) AS 'Despachos'
+            ) AS 'Despachos RedMas',
+            COUNT(Despapro.VOLUMEN) AS 'Despachos'
         FROM Rumaos.dbo.Despapro
-        WHERE Despapro.TARJETA like 'i%'
+        WHERE Despapro.TARJETA NOT LIKE 'cc%'
             AND Despapro.FECHASQL = DATEADD(DAY,-1,CAST(GETDATE() AS date))
             AND Despapro.VOLUMEN > '0'
             AND Despapro.CODPRODUCTO <> 'GNC'
@@ -102,12 +102,14 @@ df_penetRM_liq_x_turno = pd.merge(
     on="UEN",
     how="inner"
 )
+df_penetRM_liq_x_turno.sort_values(by=["TOTAL"],inplace=True)
 
-# print(df_penetRM_liq_x_turno)
+print("REDMAS PENETRACION LIQ")
+print(df_penetRM_liq_x_turno)
 
 
 ##########################################
-# Process "PENETRACIÓN" for "GNC"
+# Get yesterday "PENETRACIÓN" for "GNC"
 ##########################################
 
 df_desp_x_turno_GNC = pd.read_sql(
@@ -115,20 +117,20 @@ df_desp_x_turno_GNC = pd.read_sql(
         SELECT
             Despapro.UEN,
             Despapro.TURNO,
-            COUNT(Despapro.VOLUMEN) AS 'Despachos RedMas',
             (SELECT
-                COUNT(D.VOLUMEN) AS 'Despachos'
+                COUNT(D.VOLUMEN) AS 'Despachos RedMas'
             FROM Rumaos.dbo.Despapro as D
             WHERE D.uen = Despapro.uen
                 AND D.TURNO = Despapro.TURNO
-                AND	D.TARJETA NOT LIKE 'cc%'
+                AND	D.TARJETA like 'i%'
                 AND D.FECHASQL = DATEADD(DAY,-1,CAST(GETDATE() AS date))
                 AND D.VOLUMEN > '0'
                 AND D.CODPRODUCTO = 'GNC'
             GROUP BY D.UEN ,D.TURNO
-            ) AS 'Despachos'
+            ) AS 'Despachos RedMas',
+            COUNT(Despapro.VOLUMEN) AS 'Despachos'
         FROM Rumaos.dbo.Despapro
-        WHERE Despapro.TARJETA like 'i%'
+        WHERE Despapro.TARJETA NOT LIKE 'cc%'
             AND Despapro.FECHASQL = DATEADD(DAY,-1,CAST(GETDATE() AS date))
             AND Despapro.VOLUMEN > '0'
             AND Despapro.CODPRODUCTO = 'GNC'
@@ -176,5 +178,7 @@ df_penetRM_GNC_x_turno = pd.merge(
     on="UEN",
     how="inner"
 )
+df_penetRM_GNC_x_turno.sort_values(by=["TOTAL"],inplace=True)
 
-# print(df_penetRM_GNC_x_turno)
+print("REDMAS PENETRACION GNC")
+print(df_penetRM_GNC_x_turno)
