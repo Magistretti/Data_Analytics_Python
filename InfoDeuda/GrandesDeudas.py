@@ -90,8 +90,8 @@ df_facCliPorVend["VENDEDOR"] = df_facCliPorVend["VENDEDOR"].str.strip()
 # print(df_facCliPorVend.info())
 
 # Creating Total row
-df_facCliDet.loc["colTOTAL"]= pd.Series(df_facCliDet.sum())
-df_facCliPorVend.loc["colTOTAL"]= pd.Series(df_facCliPorVend.sum())
+df_facCliDet.loc["colTOTAL"]= pd.Series(df_facCliDet.sum(numeric_only=True))
+df_facCliPorVend.loc["colTOTAL"]= pd.Series(df_facCliPorVend.sum(numeric_only=True))
 # Cleaning NaN
 df_facCliDet = df_facCliDet.fillna({
     "N° CLIENTE":""
@@ -101,7 +101,6 @@ df_facCliDet = df_facCliDet.fillna({
 df_facCliPorVend = df_facCliPorVend.fillna({
     "VENDEDOR":"TOTAL"
 })
-
 # print(df_facCliDet.tail())
 # print(df_facCliPorVend.tail())
 
