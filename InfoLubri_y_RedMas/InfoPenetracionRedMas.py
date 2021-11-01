@@ -14,6 +14,7 @@ sys.path.insert(0,str(pathlib.Path(__file__).parent.parent))
 
 import pandas as pd
 import dataframe_image as dfi
+from PIL import Image
 
 from DatosLogin import login
 from Conectores import conectorMSSQL
@@ -303,7 +304,7 @@ ARGS:
 # This will print the df with a unique name and will erase the old image 
 # everytime the script is run
 
-def _df_to_image(df, nombre):
+def _df_to_image(df, ubicacion, nombre):
     """
     Esta función usa las biblioteca "dataframe_Image as dfi" y "os" para 
     generar un archivo .png de un dataframe. Si el archivo ya existe, este será
@@ -311,16 +312,70 @@ def _df_to_image(df, nombre):
 
     Args:
         df: dataframe a convertir
+        ubicacion: ubicacion local donde se quiere grabar el archivo
          nombre: nombre del archivo incluyendo extensión .png (ej: "hello.png")
 
     """
-    ubicacion = str(pathlib.Path(__file__).parent)+"\\"
-    
+        
     if os.path.exists(ubicacion+nombre):
         os.remove(ubicacion+nombre)
         dfi.export(df, ubicacion+nombre)
     else:
         dfi.export(df, ubicacion+nombre)
+
+
+##############
+# MERGING images
+##############
+
+def _append_images(listOfImages, direction='horizontal',
+                  bg_color=(255,255,255), alignment='center'):
+    """
+    Appends images in horizontal/vertical direction.
+
+    Args:
+        listOfImages: List of images with complete path
+        direction: direction of concatenation, 'horizontal' or 'vertical'
+        bg_color: Background color (default: white)
+        alignment: alignment mode if images need padding;
+           'left', 'right', 'top', 'bottom', or 'center'
+
+    Returns:
+        Concatenated image as a new PIL image object.
+    """
+    images = [Image.open(x) for x in listOfImages]
+    widths, heights = zip(*(i.size for i in images))
+
+    if direction=='horizontal':
+        new_width = sum(widths)
+        new_height = max(heights)
+    else:
+        new_width = max(widths)
+        new_height = sum(heights)
+
+    new_im = Image.new('RGB', (new_width, new_height), color=bg_color)
+
+    offset = 0
+    for im in images:
+        if direction=='horizontal':
+            y = 0
+            if alignment == 'center':
+                y = int((new_height - im.size[1])/2)
+            elif alignment == 'bottom':
+                y = new_height - im.size[1]
+            new_im.paste(im, (offset, y))
+            offset += im.size[0]
+        else:
+            x = 0
+            if alignment == 'center':
+                x = int((new_width - im.size[0])/2)
+            elif alignment == 'right':
+                x = new_width - im.size[0]
+            new_im.paste(im, (x, offset))
+            offset += im.size[1]
+
+    return new_im
+
 
 
 
@@ -329,6 +384,9 @@ def _df_to_image(df, nombre):
 ##############
 
 def penetracionRedMas():
+    '''
+    This function will ...
+    '''
     # Timer
     tiempoInicio = pd.to_datetime("today")
 
@@ -346,8 +404,17 @@ def penetracionRedMas():
         , "Penetración RedMas: GNC"
     )
 
-    _df_to_image(df_penetRM_liq_x_turno_Estilo,"penetracionRedMas_liq.png")
-    _df_to_image(df_penetRM_GNC_x_turno_Estilo,"penetracionRedMas_GNC.png")
+    ubicacion = str(pathlib.Path(__file__).parent)+"\\"
+    nombreIMG_liq = "penetracionRedMas_liq.png"
+    nombreIMG_GNC = "penetracionRedMas_GNC.png"
+
+    _df_to_image(df_penetRM_liq_x_turno_Estilo, ubicacion, nombreIMG_liq)
+    _df_to_image(df_penetRM_GNC_x_turno_Estilo, ubicacion, nombreIMG_GNC)
+
+    listaImagenes = [ubicacion + nombreIMG_liq, ubicacion + nombreIMG_GNC]
+        
+    fusionImagenes = _append_images(listaImagenes)
+    fusionImagenes.save(ubicacion + "Info_PenetracionRedMas.png")
 
     # Timer
     tiempoFinal = pd.to_datetime("today")
