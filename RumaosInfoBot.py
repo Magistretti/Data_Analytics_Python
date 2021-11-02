@@ -4,6 +4,10 @@
 #
 ##########################
 
+import os
+import pathlib
+ubic = str(pathlib.Path(__file__).parent)+"\\"
+
 from DatosTelegram import id_Autorizados, bot_token, testbot_token
 from DatosTelegram import testrumaos, rumaos_info
 from runpy import run_path
@@ -22,6 +26,8 @@ from telegram.ext import Defaults
 
 from functools import wraps
 
+from InfoLubri_y_RedMas.InfoPenetracionRedMas import penetracionRedMas
+
 #####//////////////######
 # BOT Token selection for testing:
 # 0 = RUMAOS_Info_bot
@@ -31,7 +37,7 @@ MODE = 0
 if MODE == 1:
     token = testbot_token
     destinatarios = [testrumaos]
-    print("//////////","USANDO TEST BOT","//////////")
+    print("\n//////////","USANDO TEST BOT","//////////\n")
 else:
     token = bot_token
     destinatarios = [rumaos_info]
@@ -47,12 +53,27 @@ filePath_Info_Despachos_Camioneros = "C:\Informes\DespachosCamionerosRedmas\\"
 ######//////////////######
 
 
+# Function to find complete path to files
+def find(name, path):
+    for root, dirs, files in os.walk(path):
+        if name in files:
+            return os.path.join(root, name)
+
+
+#########################
+# LOGGING MESSAGES
+#########################
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         , level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
+
+#########################
+# FUNCTION DECORATORS
+#########################
 
 def restricted(func):
     """
@@ -104,6 +125,10 @@ def send_action(action):
     return decorator
 
 
+#########################
+# INLINE KEYBOARD BUTTONS
+#########################
+
 @restricted # NOTE: Access restricted to "start" function!
 def start(update, context) -> None:
     # This will create inline buttons
@@ -121,6 +146,10 @@ def start(update, context) -> None:
                 , callback_data="Info Morosos")
         ]
         , [
+            InlineKeyboardButton("Info Penetración"
+                , callback_data="Info Penetración")
+        ]
+        , [
             InlineKeyboardButton("Salir"
                 , callback_data="Salir")
         ]
@@ -132,6 +161,10 @@ def start(update, context) -> None:
         , reply_markup=reply_markup
     )
 
+
+#########################
+# INLINE KEYBOARD BUTTONS ACTIONS
+#########################
 
 @send_action(ChatAction.UPLOAD_PHOTO)
 def button(update, context) -> None:
@@ -192,12 +225,27 @@ def button(update, context) -> None:
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
 
+    elif query.data == "Info Penetración":
+        try:
+            penetracionRedMas()
+            query.bot.send_photo(update.effective_chat.id
+                , open(find("Info_PenetracionRedMas.png", ubic)
+                    , "rb"
+                )
+            )
+        except:  
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
+
     else:
         query.bot.send_message(update.effective_chat.id
             , text="Algo no salió bien...")
 
 
-# Show info on how to use the bot
+#########################
+# HELP COMMAND ANSWER
+#########################
+
 def help_command(update, context) -> None:
     update.message.reply_text(
         "->Comandos Públicos:\n"
@@ -211,12 +259,20 @@ def help_command(update, context) -> None:
     )
 
 
+#########################
+# UNKNOWN COMMAND ANSWER
+#########################
+
 # Show a message when the bot receive an unknown command
 def unknown(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id
     , text="Disculpa, no entendí ese comando\n"
         +"¿Necesitas /ayuda?")
 
+
+#########################
+# "SET DAILY REPORT" COMMAND ANSWER
+#########################
 
 @developerOnly
 def set_envioDiario(update, context) -> None:
@@ -260,6 +316,11 @@ def remove_job_if_exists(name, context) -> bool:
         job.schedule_removal()
     return True
 
+
+#########################
+# "REMOVE SCHEDULED REPORTS" COMMAND ANSWER
+#########################
+
 @developerOnly
 def unset(update, context) -> None:
     """Remove the job if the user changed their mind."""
@@ -275,12 +336,20 @@ def unset(update, context) -> None:
         update.message.reply_text(
             "Escribir nombre de la tarea: /unset (nombre_Tarea)")
 
-# Trigger envio_automatico in 10 sec
+
+#########################
+# "FORCE DAILY REPORT" COMMAND ANSWER
+#########################
+
 @developerOnly
 def forzar_envio(update, context) -> None:
     update.message.reply_text("Enviando informes al canal en 10 seg")
     context.job_queue.run_once(envio_automatico, 10, name="envio_forzado")
 
+
+#########################
+# DAILY REPORT
+#########################
 
 # Reset all reports and send them to the designated channel
 def envio_automatico(context):
@@ -322,6 +391,15 @@ def envio_automatico(context):
         )
         print("Error al resetear Info Despachos_Camioneros")
 
+    try:
+        penetracionRedMas()
+        print("Info Penetracion_RedMas reseteado")
+    except:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info Penetracion_RedMas"
+        )
+        print("Error al resetear Info Penetracion_RedMas")
+
     fechahoy = dt.datetime.now().strftime("%d/%m/%y")
 
     for ids in destinatarios:
@@ -353,8 +431,24 @@ def envio_automatico(context):
                 "Info_Despachos_Camioneros.png", "rb")
             , "Despachos Camioneros"
         )
+        context.bot.send_photo(
+            ids
+            , open(filePath_Info_Despachos_Camioneros+
+                "Info_Despachos_Camioneros.png", "rb")
+            , "Despachos Camioneros"
+        )
+        context.bot.send_photo(
+            ids
+            , open(find("Info_PenetracionRedMas.png", ubic), "rb")
+            , "Penetración RedMas"
+        )
     print("")
 
+
+
+#########################
+# MAIN FUNCTION
+#########################
 
 def main() -> None:
     """Run the bot."""
@@ -399,6 +493,9 @@ def main() -> None:
     # Run the bot until the user presses Ctrl-C or the process receives SIGINT,
     # SIGTERM or SIGABRT
     updater.idle()
+
+
+
 
 
 if __name__ == "__main__":
