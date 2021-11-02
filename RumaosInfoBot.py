@@ -140,13 +140,9 @@ def start(update, context) -> None:
                 , callback_data="Volumen Ventas Ayer")
         ]
         , [
-            InlineKeyboardButton("Reset Info Morosos"
-                , callback_data="Reset Info Morosos")
-            , InlineKeyboardButton("Info Morosos"
+            InlineKeyboardButton("Info Morosos"
                 , callback_data="Info Morosos")
-        ]
-        , [
-            InlineKeyboardButton("Info Penetración"
+            , InlineKeyboardButton("Info Penetración"
                 , callback_data="Info Penetración")
         ]
         , [
@@ -176,13 +172,20 @@ def button(update, context) -> None:
 
     query.edit_message_text(text=f"Opción Seleccionada: {query.data}")
 
+    # INFO MOROSOS
     if query.data == "Info Morosos":
-        query.bot.send_photo(update.effective_chat.id
-            , open(filePath_Info_Morosos+"Info_Morosos.png"
-                , "rb"
+        try:
+            run_path(filePath_Info_Morosos+"Morosos.py")
+            query.bot.send_photo(update.effective_chat.id
+                , open(filePath_Info_Morosos+"Info_Morosos.png"
+                    , "rb"
+                )
             )
-        )
+        except:
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
 
+    # INFO VOLUMEN VENTAS AYER
     elif query.data == "Volumen Ventas Ayer":
         try:
             run_path(filePath_InfoVtaComb+"TotalesPorCombustible.py")
@@ -195,6 +198,7 @@ def button(update, context) -> None:
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
 
+    # INFO GRANDES DEUDAS
     elif query.data == "Info Deudas":
         try:
             run_path(filePath_InfoGrandesDeudas+"GrandesDeudas.py")
@@ -212,19 +216,7 @@ def button(update, context) -> None:
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
 
-    elif query.data == "Salir":
-        query.bot.send_message(update.effective_chat.id
-            , text="Consulta Finalizada")
-
-    elif query.data == "Reset Info Morosos":
-        try:
-            run_path(filePath_Info_Morosos+"Morosos.py")
-            query.bot.send_message(update.effective_chat.id
-                , text="Informe reseteado")
-        except:
-            query.bot.send_message(update.effective_chat.id
-                , text="Algo falló, revisar consola")
-
+    # INFO PENETRACION
     elif query.data == "Info Penetración":
         try:
             penetracionRedMas()
@@ -236,6 +228,11 @@ def button(update, context) -> None:
         except:  
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
+
+    # EXIT OPTION
+    elif query.data == "Salir":
+        query.bot.send_message(update.effective_chat.id
+            , text="Consulta Finalizada")
 
     else:
         query.bot.send_message(update.effective_chat.id
