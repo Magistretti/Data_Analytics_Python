@@ -385,7 +385,9 @@ def _append_images(listOfImages, direction='horizontal',
 
 def penetracionRedMas():
     '''
-    This function will ...
+    This function will create 3 .png files at the module 
+    folder ("penetracionRedMas_liq", "penetracionRedMas_GNC" and
+    "Info_PenetracionRedMas") and will display total time elapsed
     '''
     # Timer
     tiempoInicio = pd.to_datetime("today")
