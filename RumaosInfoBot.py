@@ -430,12 +430,6 @@ def envio_automatico(context):
         )
         context.bot.send_photo(
             ids
-            , open(filePath_Info_Despachos_Camioneros+
-                "Info_Despachos_Camioneros.png", "rb")
-            , "Despachos Camioneros"
-        )
-        context.bot.send_photo(
-            ids
             , open(find("Info_PenetracionRedMas.png", ubic), "rb")
             , "Penetración RedMas"
         )
