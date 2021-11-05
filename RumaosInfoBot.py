@@ -436,6 +436,21 @@ def envio_automatico(context):
     print("")
 
 
+#########################
+# CONNECTION KEEP ALIVE
+#########################
+
+def keepAlive(context):
+    '''
+    Will send a message to an invalid Telegram ID to 
+    keep alive the connection
+    '''
+    try:
+        context.bot.send_message(0, text="Keep Alive")
+    except:
+        pass
+    
+
 
 #########################
 # MAIN FUNCTION
@@ -475,6 +490,9 @@ def main() -> None:
         , dt.time(11,0,0,tzinfo=argTime) 
         , name="info_diario"
     )
+
+    # Keep Alive Task
+    updater.job_queue.run_repeating(keepAlive, interval=210, first=10)
 
     ############# /TASKs ############
 
