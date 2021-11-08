@@ -27,6 +27,7 @@ from telegram.ext import Defaults
 from functools import wraps
 
 from InfoLubri_y_RedMas.InfoPenetracionRedMas import penetracionRedMas
+from InfoLubri_y_RedMas.InfoLubri import ventaLubri
 
 #####//////////////######
 # BOT Token selection for testing:
@@ -396,6 +397,15 @@ def envio_automatico(context):
             , text="Error al resetear Info Penetracion_RedMas"
         )
         print("Error al resetear Info Penetracion_RedMas")
+    
+    try:
+        ventaLubri()
+        print("Info Venta_Lubricante reseteado")
+    except:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info Venta_Lubricante"
+        )
+        print("Error al resetear Info Venta_Lubricante")
 
     fechahoy = dt.datetime.now().strftime("%d/%m/%y")
 
@@ -432,6 +442,11 @@ def envio_automatico(context):
             ids
             , open(find("Info_PenetracionRedMas.png", ubic), "rb")
             , "Penetración RedMas"
+        )
+        context.bot.send_photo(
+            ids
+            , open(find("Info_VentaLubri.png", ubic), "rb")
+            , "Venta Lubricantes"
         )
     print("")
 
