@@ -249,8 +249,8 @@ def _estiladorVtaTitulo(df,listaColNumericas,titulo):
 This function will return a styled dataframe that must be assign to a variable.
 ARGS:
     df: Dataframe that will be styled.
-    listaColNumericas: List of numeric columns that will be formatted with
-    zero decimals and thousand separator.
+    listaColNumericas: List of numeric columns that will be formatted 
+    as percentage.
     titulo: String for the table caption.
     """
     resultado = df.style \
