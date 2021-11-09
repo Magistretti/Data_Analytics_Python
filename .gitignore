@@ -6,3 +6,4 @@ test.py
 *.jpg
 Conectores.py
 errorLog*.txt
+*.log
