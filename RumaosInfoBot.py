@@ -147,6 +147,12 @@ def start(update, context) -> None:
                 , callback_data="Info Penetración")
         ]
         , [
+            InlineKeyboardButton("Info Despachos Camioneros"
+                , callback_data="Info Despachos Camioneros")
+            , InlineKeyboardButton("Info Ventas Lubri"
+                , callback_data="Info Ventas Lubri")
+        ]
+        , [
             InlineKeyboardButton("Salir"
                 , callback_data="Salir")
         ]
@@ -216,6 +222,20 @@ def button(update, context) -> None:
         except:  
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
+    
+    # INFO DESPACHOS CAMIONEROS
+    elif query.data == "Info Despachos Camioneros":
+        try:
+            run_path(filePath_Info_Despachos_Camioneros+"DespachosCamion.py")
+            query.bot.send_photo(update.effective_chat.id
+                , open(filePath_Info_Despachos_Camioneros
+                    + "Info_Despachos_Camioneros.png"
+                    , "rb"
+                )
+            )
+        except:  
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
 
     # INFO PENETRACION
     elif query.data == "Info Penetración":
@@ -223,6 +243,19 @@ def button(update, context) -> None:
             penetracionRedMas()
             query.bot.send_photo(update.effective_chat.id
                 , open(find("Info_PenetracionRedMas.png", ubic)
+                    , "rb"
+                )
+            )
+        except:  
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
+    
+    # INFO VENTAS LUBRI
+    elif query.data == "Info Ventas Lubri":
+        try:
+            ventaLubri()
+            query.bot.send_photo(update.effective_chat.id
+                , open(find("Info_VentaLubri.png", ubic)
                     , "rb"
                 )
             )
