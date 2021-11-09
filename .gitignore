@@ -5,4 +5,4 @@ test.py
 *.png
 *.jpg
 Conectores.py
-errorLog.txt
+errorLog*.txt
