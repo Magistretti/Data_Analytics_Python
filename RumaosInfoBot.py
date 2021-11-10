@@ -33,7 +33,7 @@ from InfoLubri_y_RedMas.InfoLubri import ventaLubri
 # BOT Token selection for testing:
 # 0 = RUMAOS_Info_bot
 # 1 = RUMAOStest_bot
-MODE = 1
+MODE = 0
 
 if MODE == 1:
     token = testbot_token
@@ -95,6 +95,7 @@ formatter = logging.Formatter(fmt=FORMAT, datefmt=DATEFMT)
 filelog.setFormatter(formatter)
 # add the handler to the root logger
 logging.getLogger("").addHandler(filelog)
+logger = logging.getLogger(__name__)
 
 
 
@@ -214,9 +215,10 @@ def button(update, context) -> None:
                     , "rb"
                 )
             )
-        except:
+        except Exception as e:
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
 
     # INFO VOLUMEN VENTAS AYER
     elif query.data == "Volumen Ventas Ayer":
@@ -227,9 +229,10 @@ def button(update, context) -> None:
                     , "rb"
                 )
             )
-        except:  
+        except Exception as e:  
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
 
     # INFO GRANDES DEUDAS
     elif query.data == "Info Deudas":
@@ -245,9 +248,10 @@ def button(update, context) -> None:
                     , "rb"
                 )
             )
-        except:  
+        except Exception as e:  
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
     
     # INFO DESPACHOS CAMIONEROS
     elif query.data == "Info Despachos Camioneros":
@@ -259,9 +263,10 @@ def button(update, context) -> None:
                     , "rb"
                 )
             )
-        except:  
+        except Exception as e:  
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
 
     # INFO PENETRACION
     elif query.data == "Info Penetración":
@@ -272,9 +277,10 @@ def button(update, context) -> None:
                     , "rb"
                 )
             )
-        except:  
+        except Exception as e:  
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
     
     # INFO VENTAS LUBRI
     elif query.data == "Info Ventas Lubri":
@@ -285,9 +291,10 @@ def button(update, context) -> None:
                     , "rb"
                 )
             )
-        except:  
+        except Exception as e:  
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
 
     # EXIT OPTION
     elif query.data == "Salir":
@@ -415,56 +422,56 @@ def envio_automatico(context):
     try:
         run_path(filePath_Info_Morosos+"Morosos.py")
         print("Info Morosos reseteado")
-    except:
+    except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info Morosos"
         )
-        print("Error al resetear Info Morosos")
+        logger.error("Error al resetear Info Morosos", exc_info=1)
 
     try:
         run_path(filePath_InfoVtaComb+"TotalesPorCombustible.py")
         print("Info TotalesPorCombustible reseteado")
-    except:
+    except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info TotalesPorCombustible"
         )
-        print("Error al resetear Info TotalesPorCombustible")
+        logger.error("Error al resetear Info TotalesPorCombustible", exc_info=1)
 
     try:
         run_path(filePath_InfoGrandesDeudas+"GrandesDeudas.py")
         print("Info GrandesDeudas reseteado")
-    except:
+    except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info GrandesDeudas"
         )
-        print("Error al resetear Info GrandesDeudas")        
+        logger.error("Error al resetear Info GrandesDeudas", exc_info=1)
 
     try:
         run_path(filePath_Info_Despachos_Camioneros+"DespachosCamion.py")
         print("Info Despachos_Camioneros reseteado")
-    except:
+    except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info Despachos_Camioneros"
         )
-        print("Error al resetear Info Despachos_Camioneros")
+        logger.error("Error al resetear Despachos_Camioneros", exc_info=1)
 
     try:
         penetracionRedMas()
         print("Info Penetracion_RedMas reseteado")
-    except:
+    except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info Penetracion_RedMas"
         )
-        print("Error al resetear Info Penetracion_RedMas")
+        logger.error("Error al resetear Penetracion_RedMas", exc_info=1)
     
     try:
         ventaLubri()
         print("Info Venta_Lubricante reseteado")
-    except:
+    except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info Venta_Lubricante"
         )
-        print("Error al resetear Info Venta_Lubricante")
+        logger.error("Error al resetear Venta_Lubricante", exc_info=1)
 
     fechahoy = dt.datetime.now().strftime("%d/%m/%y")
 
