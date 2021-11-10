@@ -33,7 +33,7 @@ from InfoLubri_y_RedMas.InfoLubri import ventaLubri
 # BOT Token selection for testing:
 # 0 = RUMAOS_Info_bot
 # 1 = RUMAOStest_bot
-MODE = 0
+MODE = 1
 
 if MODE == 1:
     token = testbot_token
@@ -47,10 +47,10 @@ else:
 ######//////////////######
 # Where to find the report image files of:
 # "Info_Morosos.png", "Info_VolumenVentas.png", etc
-filePath_Info_Morosos = "C:\Informes\InfoMorosos\\"
+filePath_Info_Morosos = ".\InfoMorosos\\"
 filePath_InfoVtaComb = ".\InfoVtaCombustibles\\"
-filePath_InfoGrandesDeudas = "C:\Informes\InfoDeuda\\"
-filePath_Info_Despachos_Camioneros = "C:\Informes\DespachosCamionerosRedmas\\"
+filePath_InfoGrandesDeudas = ".\InfoDeuda\\"
+filePath_Info_Despachos_Camioneros = ".\DespachosCamionerosRedmas\\"
 ######//////////////######
 
 
