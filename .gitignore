@@ -7,3 +7,4 @@ test.py
 Conectores.py
 errorLog*.txt
 *.log
+bot_activity.*

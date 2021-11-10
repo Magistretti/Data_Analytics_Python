@@ -48,7 +48,7 @@ else:
 # Where to find the report image files of:
 # "Info_Morosos.png", "Info_VolumenVentas.png", etc
 filePath_Info_Morosos = "C:\Informes\InfoMorosos\\"
-filePath_InfoVtaComb = "C:\Informes\InfoVtaCombustibles\\"
+filePath_InfoVtaComb = ".\InfoVtaCombustibles\\"
 filePath_InfoGrandesDeudas = "C:\Informes\InfoDeuda\\"
 filePath_Info_Despachos_Camioneros = "C:\Informes\DespachosCamionerosRedmas\\"
 ######//////////////######
@@ -61,15 +61,41 @@ def find(name, path):
             return os.path.join(root, name)
 
 
+
 #########################
 # LOGGING MESSAGES
 #########################
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        , level=logging.INFO
+# logging.basicConfig(
+#     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+#         , level=logging.INFO
+# )
+# logger = logging.getLogger(__name__)
+
+import logging.handlers
+FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+DATEFMT = "%Y-%m-%d %H:%M:%S"
+
+if not os.path.exists("./log"):
+    os.mkdir("./log")
+
+# set up logging to file - see previous section for more details
+logging.basicConfig(level=logging.INFO,
+                    format=FORMAT,
+                    datefmt=DATEFMT)
+# define a Handler which writes INFO messages to a log file
+filelog = logging.handlers.TimedRotatingFileHandler("./log/bot_activity.log"
+    , when="midnight"
+    , backupCount=5
 )
-logger = logging.getLogger(__name__)
+filelog.setLevel(logging.INFO)
+# set a format
+formatter = logging.Formatter(fmt=FORMAT, datefmt=DATEFMT)
+# tell the handler to use this format
+filelog.setFormatter(formatter)
+# add the handler to the root logger
+logging.getLogger("").addHandler(filelog)
+
 
 
 #########################
