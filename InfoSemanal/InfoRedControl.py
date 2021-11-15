@@ -354,10 +354,10 @@ def pre_RedControlSemanal(conexMSSQL):
         Dataframe
         '''
         # Filtering and grouping of df_ant
-        df_ant = _filtrador(df_ant, balance).groupby("UEN", as_index=False).sum()
+        df_ant = _filtrador(df_ant, balance)
         df_ant = df_ant.groupby("UEN", as_index=False).sum()
         # Filtering and grouping of df_act
-        df_act = _filtrador(df_act, balance).groupby("UEN", as_index=False).sum()
+        df_act = _filtrador(df_act, balance)
         df_act = df_act.groupby("UEN", as_index=False).sum()
         # merge df_ant and df_act
         df_merge = pd.merge(
