@@ -2,13 +2,12 @@
 #
 #     INFORME Red Control Semanal
 #             
-#               11/11/21
+#        11/11/21 - 15/11/21
 ###################################
 
 import os
 import sys
 import pathlib
-from numpy import clongdouble, inner
 
 # Allow imports from the top folder
 sys.path.insert(0,str(pathlib.Path(__file__).parent.parent))
