@@ -386,11 +386,24 @@ def vtaProyGranClient():
 
     _df_to_image(df, ubicacion, nombreIMG)
 
+    # To convert the PNG image to PDF first we need to transform it from 
+    # "RGBA" to "RGB"
+    imgRGBA = Image.open(ubicacion+nombreIMG)
+    imRGB = Image.new('RGB', imgRGBA.size, (255, 255, 255))
+    imRGB.paste(imgRGBA, mask=imgRGBA.split()[3])
+    # Saving has a PDF
+    nombrePDF = "Grandes_Clientes_Baja_Consumo.pdf"
+    imRGB.save(ubicacion+nombrePDF, "PDF", resolution=90.0, save_all=True)
+    
+
     # Timer
     tiempoFinal = pd.to_datetime("today")
-    print("\nInfo Red Control Liq"+"\nTiempo de Ejecucion Total:")
-    print(tiempoFinal-tiempoInicio)
-
+    logger.info(
+        "\nInfo Grandes Clientes Baja Consumo"
+        + "\nTiempo de Ejecucion Total: "
+        + str(tiempoFinal-tiempoInicio)
+    )
+    
 
 
 if __name__ == "__main__":
