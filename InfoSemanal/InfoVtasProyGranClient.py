@@ -345,9 +345,9 @@ def _df_to_image(df, ubicacion, nombre):
         
     if os.path.exists(ubicacion+nombre):
         os.remove(ubicacion+nombre)
-        dfi.export(df, ubicacion+nombre)
+        dfi.export(df, ubicacion+nombre, max_rows=-1)
     else:
-        dfi.export(df, ubicacion+nombre)
+        dfi.export(df, ubicacion+nombre, max_rows=-1)
 
 
 
