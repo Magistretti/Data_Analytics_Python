@@ -19,9 +19,17 @@ from PIL import Image
 from DatosLogin import login
 from Conectores import conectorMSSQL
 
+import logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        , level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 
-def pre_VtaProyGClient(conexMSSQL):
+
+
+def pre_VtaProyGranClient(conexMSSQL):
     '''
     Will calculate and return 
 
@@ -201,18 +209,18 @@ def pre_VtaProyGClient(conexMSSQL):
         '''
         # Filtering and grouping of df_ant
         df_ant = _filtrador(df_ant)
-        df_ant = df_ant.groupby(["NROCLIENTE", "NOMBRE", "PRODUCTO"]
+        df_ant = df_ant.groupby(["NROCLIENTE", "NOMBRE"]
             , as_index=False).sum()
         # Filtering and grouping of df_act
         df_act = _filtrador(df_act)
-        df_act = df_act.groupby(["NROCLIENTE", "NOMBRE", "PRODUCTO"]
+        df_act = df_act.groupby(["NROCLIENTE", "NOMBRE"]
             , as_index=False).sum()
         # merge df_ant and df_act
         df_merge = pd.merge(
             df_ant
             , df_act
             , how="left"
-            , on=["NROCLIENTE", "NOMBRE", "PRODUCTO"]
+            , on=["NROCLIENTE", "NOMBRE"]
         )
 
         # Filter rows with "Mes Anterior" < 1000
@@ -225,8 +233,8 @@ def pre_VtaProyGClient(conexMSSQL):
         # Column "Intermensual Volumen"
         df_merge["Intermensual Volumen"] = \
             (df_merge["Mes Actual"] - df_merge["Mes Anterior"])
-        # Filter rows with "Intermensual Volumen" > 0
-        df_merge = df_merge[df_merge["Intermensual Volumen"] < 0]
+        # Filter rows with "Intermensual Volumen" >= -100
+        df_merge = df_merge[df_merge["Intermensual Volumen"] < -100]
         
         return df_merge
 
@@ -237,8 +245,8 @@ def pre_VtaProyGClient(conexMSSQL):
 
     df_mes_vtas_ctas = _preparador(df_vta_ctas_m_ant, df_vta_ctas_m_act)
 
-    df_mes_vtas_ctas = df_mes_vtas_ctas.sort_values(by=[#"Intermensual Volumen"
-         "NOMBRE", "PRODUCTO"])
+    df_mes_vtas_ctas = df_mes_vtas_ctas.sort_values(by=["Intermensual Volumen"
+        , "NOMBRE"])
 
     
     return df_mes_vtas_ctas
@@ -248,6 +256,11 @@ def pre_VtaProyGClient(conexMSSQL):
 ##########################################
 # STYLING of the dataframe
 ##########################################
+
+def excedidoFondoRojo(dataframe):
+    return ["background-color: red" if valor == 0 
+        else "background-color: default" for valor in dataframe]
+
 
 def _estiladorVtaTitulo(df, list_Col_Num, list_Col_Perc, titulo):
     """
@@ -267,13 +280,11 @@ ARGS:
         .set_caption(
             titulo
             + "<br>"
-            + "Semana Actual "
-            + ((pd.to_datetime("today")-pd.to_timedelta(8,"days"))
-            .strftime("%d/%m/%y"))
-            + " al "
-            + ((pd.to_datetime("today")-pd.to_timedelta(1,"days"))
-            .strftime("%d/%m/%y"))
-        ) \
+            + "Mes Actual Proyectado "
+            + pd.to_datetime("today").month_name("ES")
+            + "-"
+            + pd.to_datetime("today").strftime("%Y")
+            ) \
         .set_properties(subset=list_Col_Num + list_Col_Perc
             , **{"text-align": "center", "width": "80px"}) \
         .set_properties(border= "2px solid black") \
@@ -298,6 +309,14 @@ ARGS:
         # .apply(lambda x: ["color: white" if x.name == df.index[-1]
         #     else "" for i in x]
         #     , axis=1)
+
+    #Gradient color for column "Intermensual %" without affecting row "TOTAL"
+    resultado = resultado.background_gradient(
+        cmap="RdYlGn" # Red->Yellow->Green
+        ,vmin=-1
+        ,vmax=0
+        ,subset="Intermensual %"
+    )
 
     
     return resultado
@@ -332,18 +351,48 @@ def _df_to_image(df, ubicacion, nombre):
 
 
 
+##########################################
+# FUNCTION TO RUN MODULE
+##########################################
 
+def vtaProyGranClient():
+    '''
+    Create image "Info_VtaProyGranClient_Semanal.png"
+    '''
 
-
-if __name__ == "__main__":
+    # Timer
+    tiempoInicio = pd.to_datetime("today")
 
     conexMSSQL = conectorMSSQL(login)
-    a=pre_VtaProyGClient(conexMSSQL)
+
+    df = pre_VtaProyGranClient(conexMSSQL)
 
     # Numeric Columns
     numCols = ["Mes Anterior", "Mes Actual", "Intermensual Volumen"]
     # Percentage Columns
     percCols = ["Intermensual %"]
-    a=_estiladorVtaTitulo(a,numCols,percCols,"Titulito")
-    display(a)
+     
+    # Apply style
+    df = _estiladorVtaTitulo(
+        df
+        , numCols
+        , percCols
+        , "Grandes Clientes Con Baja de Consumo"
+    )
+
+    # Path and name for DF image
+    ubicacion = str(pathlib.Path(__file__).parent)+"\\"
+    nombreIMG = "Info_VtaProyGranClient_Semanal.png"
+
+    _df_to_image(df, ubicacion, nombreIMG)
+
+    # Timer
+    tiempoFinal = pd.to_datetime("today")
+    print("\nInfo Red Control Liq"+"\nTiempo de Ejecucion Total:")
+    print(tiempoFinal-tiempoInicio)
+
+
+
+if __name__ == "__main__":
+    vtaProyGranClient()
     
