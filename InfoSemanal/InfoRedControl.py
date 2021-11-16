@@ -19,6 +19,12 @@ from PIL import Image
 from DatosLogin import login
 from Conectores import conectorMSSQL
 
+import logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        , level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 
 def pre_RedControlSemanal(conexMSSQL):
@@ -634,8 +640,12 @@ def redControlSemanal():
 
     # Timer
     tiempoFinal = pd.to_datetime("today")
-    print("\nInfo Red Control Liq"+"\nTiempo de Ejecucion Total:")
-    print(tiempoFinal-tiempoInicio)
+    logger.info(
+        "\nInfo Red Control Liq"
+        + "\nTiempo de Ejecucion Total: "
+        + str(tiempoFinal-tiempoInicio)
+    )
+    
 
 
 
