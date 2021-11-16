@@ -11,6 +11,13 @@ import pandas as pd
 pd.options.display.float_format = "{:20,.2f}".format 
 #########
 
+import logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        , level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
 import dataframe_image as dfi
 
 tiempoInicio = pd.to_datetime("today")
@@ -43,10 +50,9 @@ try:
     )
 except Exception as e:
     listaErrores = e.args[1].split(".")
-    print("\nOcurrió un error al conectar a SQL Server:")
+    logger.error("\nOcurrió un error al conectar a SQL Server: ")
     for i in listaErrores:
-        print(i)
-    print("")
+        logger.error(i)
     exit()
 
 
@@ -399,5 +405,8 @@ else:
 
 # Timer
 tiempoFinal = pd.to_datetime("today")
-print("\nInfo Morosos"+"\nTiempo de Ejecucion Total:")
-print(tiempoFinal-tiempoInicio)
+logger.info(
+    "\nInfo Morosos"
+    + "\nTiempo de Ejecucion Total: "
+    + str(tiempoFinal-tiempoInicio)
+)

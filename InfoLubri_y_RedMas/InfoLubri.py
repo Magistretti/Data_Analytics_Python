@@ -18,6 +18,14 @@ import dataframe_image as dfi
 from DatosLogin import login
 from Conectores import conectorMSSQL
 
+import logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        , level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+
 
 def datosLubri(conexMSSQL):
 
@@ -211,8 +219,11 @@ def ventaLubri():
 
     # Timer
     tiempoFinal = pd.to_datetime("today")
-    print("\nInfo Venta Lubricantes"+"\nTiempo de Ejecucion Total:")
-    print(tiempoFinal-tiempoInicio)
+    logger.info(
+        "\nInfo Venta Lubricantes"
+        + "\nTiempo de Ejecucion Total: "
+        + str(tiempoFinal-tiempoInicio)
+    )
 
 
 

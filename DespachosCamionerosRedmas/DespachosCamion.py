@@ -15,6 +15,14 @@ import pandas as pd
 import os
 import dataframe_image as dfi
 
+import logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        , level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+
 tiempoInicio = pd.to_datetime("today")
 
 
@@ -34,16 +42,16 @@ def conectorMySQL(datos):
         )
         if conexMySQL.is_connected():
             db_Info = conexMySQL.get_server_info()
-            print("\nConnected to MySQL Server version ", db_Info)
+            logger.info("\nConnected to MySQL Server version " + db_Info)
             cursor = conexMySQL.cursor()
             cursor.execute("select database();")
             record = cursor.fetchone()
-            print("You're connected to database:", record)
+            logger.info("You're connected to database:" + record)
             cursor.close()
             return conexMySQL
             
     except Error as e:
-        print("\nError while connecting to MySQL", e)
+        logger.error("\nError while connecting to MySQL\n" + e, exc_info=1)
 
 
 def conectorMSSQL(datos):
@@ -60,17 +68,21 @@ def conectorMSSQL(datos):
             UID="+datos[2]+";\
             PWD="+ datos[3]
         )
-        print("\nConnected to server:", datos[0])
-        print("Database:", datos[1])
-        print("")
+        logger.info(
+            "\nConnected to server: "
+            + datos[0]
+            + "\nDatabase: " 
+            + datos[1]
+        )
+        
         return conexMSSQL
 
     except Exception as e:
         listaErrores = e.args[1].split(".")
-        print("\nOcurrió un error al conectar a SQL Server:")
+        logger.error("\nOcurrió un error al conectar a SQL Server: ")
         for i in listaErrores:
-            print(i)
-        print("")
+            logger.error(i)
+        
 
 # Create database connections
 conexMySQL = conectorMySQL(loginMySQL)
@@ -352,13 +364,16 @@ df_to_image(df_despachos_Y_Activ_Estilo, ubicacion, nombreDespachos)
 
 # Timer
 tiempoFinal = pd.to_datetime("today")
-print("\nInfo 1er Despachos Camioneros"+"\nTiempo de Ejecucion Total:")
-print(tiempoFinal-tiempoInicio)
+logger.info(
+    "\nInfo 1er Despachos Camioneros"
+    + "\nTiempo de Ejecucion Total: "
+    + str(tiempoFinal-tiempoInicio)
+)
 
 
-if __name__ == "__main__":
-    print("Nada por aquí")
-    # Timer
-    tiempoFinal = pd.to_datetime("today")
-    print("\nInfo 1er Despachos Camionero"+"\nTiempo de Ejecucion Total:")
-    print(tiempoFinal-tiempoInicio)  
+# if __name__ == "__main__":
+#     print("Nada por aquí")
+#     # Timer
+#     tiempoFinal = pd.to_datetime("today")
+#     print("\nInfo 1er Despachos Camionero"+"\nTiempo de Ejecucion Total:")
+#     print(tiempoFinal-tiempoInicio)  

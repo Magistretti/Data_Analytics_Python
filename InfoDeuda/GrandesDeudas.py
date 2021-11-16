@@ -11,6 +11,14 @@ import dataframe_image as dfi
 import pyodbc #Library to connect to Microsoft SQL Server
 from DatosLogin import login #Holds connection data to the SQL Server
 
+import logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        , level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+
 tiempoInicio = pd.to_datetime("today")
 
 #########
@@ -29,10 +37,9 @@ try:
     )
 except Exception as e:
     listaErrores = e.args[1].split(".")
-    print("\nOcurrió un error al conectar a SQL Server:")
+    logger.error("\nOcurrió un error al conectar a SQL Server: ")
     for i in listaErrores:
-        print(i)
-    print("")
+        logger.error(i)
     exit()
 
 ########
@@ -204,5 +211,8 @@ df_to_image(df_facCliPorVend_Estilo, ubicacion, nombreFacCliPorVend)
 
 # Timer
 tiempoFinal = pd.to_datetime("today")
-print("\nInfo Grandes Deudas"+"\nTiempo de Ejecucion Total:")
-print(tiempoFinal-tiempoInicio)
+logger.info(
+    "\nInfo Grandes Deudas"
+    + "\nTiempo de Ejecucion Total: "
+    + str(tiempoFinal-tiempoInicio)
+)
