@@ -44,22 +44,39 @@ else:
     destinatarios = [rumaos_info]
 ######//////////////######
 
+
+# Function to find complete path to files
+def find(name, path, type="file"):
+    '''
+    Find the path to folders or files.
+
+    Args:
+    name: name of file or folder
+    path: starting path of search
+     type: "file" or "dir" (default: "file")
+
+    Return a string of the complete path to folder or file
+    '''
+    for root, dirs, files in os.walk(path):
+        if type == "file":
+            if name in files:
+                return os.path.join(root, name)
+        elif type == "dir":
+            if name in dirs:
+                return os.path.join(root, name)
+        else:
+            raise ValueError("'type' must be 'file' or 'dir'")
+
+
 ######//////////////######
 # Where to find the report image files of:
 # "Info_Morosos.png", "Info_VolumenVentas.png", etc
-filePath_Info_Morosos = ".\InfoMorosos\\"
-filePath_InfoVtaComb = ".\InfoVtaCombustibles\\"
-filePath_InfoGrandesDeudas = ".\InfoDeuda\\"
-filePath_Info_Despachos_Camioneros = ".\DespachosCamionerosRedmas\\"
+filePath_Info_Morosos = find("InfoMorosos", ubic, "dir") + "\\"
+filePath_InfoVtaComb = find("InfoVtaCombustibles", ubic, "dir") + "\\"
+filePath_InfoGrandesDeudas = find("InfoDeuda", ubic, "dir") + "\\"
+filePath_Info_Despachos_Camioneros = \
+    find("DespachosCamionerosRedmas", ubic, "dir") + "\\"
 ######//////////////######
-
-
-# Function to find complete path to files
-def find(name, path):
-    for root, dirs, files in os.walk(path):
-        if name in files:
-            return os.path.join(root, name)
-
 
 
 #########################
@@ -76,15 +93,16 @@ import logging.handlers
 FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 DATEFMT = "%Y-%m-%d %H:%M:%S"
 
-if not os.path.exists("./log"):
-    os.mkdir("./log")
+if not os.path.exists(ubic + "log"):
+    os.mkdir(ubic + "log")
 
 # set up logging to file - see previous section for more details
 logging.basicConfig(level=logging.INFO,
                     format=FORMAT,
                     datefmt=DATEFMT)
 # define a Handler which writes INFO messages to a log file
-filelog = logging.handlers.TimedRotatingFileHandler("./log/bot_activity.log"
+filelog = logging.handlers.TimedRotatingFileHandler(
+    ubic + "log\\bot_activity.log"
     , when="midnight"
     , backupCount=5
 )
