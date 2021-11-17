@@ -46,7 +46,7 @@ def conectorMySQL(datos):
             cursor = conexMySQL.cursor()
             cursor.execute("select database();")
             record = cursor.fetchone()
-            logger.info("You're connected to database:" + record)
+            logger.info("You're connected to database: " + record[0])
             cursor.close()
             return conexMySQL
             
