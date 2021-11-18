@@ -26,13 +26,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+#########
+# Formating display of dataframes with comma separator for numbers
+pd.options.display.float_format = "{:20,.0f}".format 
+#########
+
 conexMSSQL = conectorMSSQL(login)
+
+
 
 ##########################################
 # Get sales of liquid fuel
 ##########################################
 
-df_vtas_Liq = pd.read_sql(
+df_vtas_liq = pd.read_sql(
     """
     DECLARE @inicioMesActual DATETIME
     SET @inicioMesActual = DATEADD(month, DATEDIFF(month, 0, CURRENT_TIMESTAMP), 0)
@@ -87,6 +95,97 @@ df_vtas_Liq = pd.read_sql(
     """
     , conexMSSQL
 )
+df_vtas_liq = df_vtas_liq.convert_dtypes()
 
-print(df_vtas_Liq.info())
-print(df_vtas_Liq)
+
+##########################################
+# Get "gift" values of liquid fuel
+##########################################
+
+df_regalo_liq = pd.read_sql(
+    """
+    DECLARE @inicioMesActual DATETIME
+    SET @inicioMesActual = DATEADD(month, DATEDIFF(month, 0, CURRENT_TIMESTAMP), 0)
+
+    DECLARE @inicioMesAnterior DATETIME
+    SET @inicioMesAnterior = DATEADD(M,-1,@inicioMesActual)
+
+    --Divide por la cant de días del mes anterior y multiplica por la cant de días del
+    --mes actual
+    DECLARE @pondMesAnt decimal(18,8)--Evitar cambio de config regional por float
+    SET @pondMesAnt = CAST(DAY(EOMONTH(CURRENT_TIMESTAMP)) AS float) /
+        CAST(DAY(EOMONTH(@inicioMesAnterior)) AS float)
+
+    DECLARE @hoy DATETIME
+    SET @hoy = DATEADD(DAY, DATEDIFF(DAY, 0, CURRENT_TIMESTAMP), 0)
+
+    --Divide por la cantidad de días cursados del mes actual y multiplica por la cant
+    --de días del mes actual
+    DECLARE @pondMesAct decimal(18,8)--Evitar cambio de config regional por float
+    SET @pondMesAct = CAST(DAY(EOMONTH(CURRENT_TIMESTAMP)) AS float) /
+        (CAST(DAY(CURRENT_TIMESTAMP) AS float)-1)
+
+    SELECT
+        RTRIM(EmP.[UEN]) AS UEN
+        ,RTRIM(EmP.[CODPRODUCTO]) AS CODPRODUCTO
+        ,T2.[Volumen Acumulado]
+        ,sum(-EmP.[VOLUMEN] * @pondMesAnt) AS 'Mes Anterior Vol Proyectado'
+        ,T2.[Mes Actual Vol Proyectado]
+    FROM [Rumaos].[dbo].[EmpPromo] AS EmP
+        INNER JOIN Promocio AS P 
+            ON EmP.UEN = P.UEN 
+            AND EmP.CODPROMO = P.CODPROMO
+    FULL OUTER JOIN (SELECT
+            EmP.[UEN]
+            ,EmP.[CODPRODUCTO]
+            ,sum(-EmP.[VOLUMEN]) AS 'Volumen Acumulado'
+            ,sum(-EmP.[VOLUMEN] * @pondMesAct) AS 'Mes Actual Vol Proyectado'
+        FROM [Rumaos].[dbo].[EmpPromo] AS EmP
+            INNER JOIN Promocio AS P 
+                ON EmP.UEN = P.UEN 
+                AND EmP.CODPROMO = P.CODPROMO
+        WHERE FECHASQL >= @inicioMesActual
+            AND FECHASQL < @hoy
+            AND EmP.VOLUMEN > '0'
+            AND EmP.CODPRODUCTO <> 'GNC'
+            AND (EmP.[CODPROMO] = '30'
+                OR P.[DESCRIPCION] like '%PRUEBA%'
+                OR P.[DESCRIPCION] like '%TRASLADO%'
+                OR P.[DESCRIPCION] like '%MAYORISTA%'
+            )
+            group by EmP.UEN, EmP.CODPRODUCTO
+            ) AS T2
+            ON EmP.UEN = T2.UEN AND EmP.CODPRODUCTO = T2.CODPRODUCTO
+        WHERE FECHASQL >= @inicioMesAnterior
+            AND FECHASQL < @inicioMesActual
+            AND EmP.VOLUMEN > '0'
+            AND EmP.CODPRODUCTO <> 'GNC'
+            AND (EmP.[CODPROMO] = '30'
+                OR P.[DESCRIPCION] like '%PRUEBA%'
+                OR P.[DESCRIPCION] like '%TRASLADO%'
+                OR P.[DESCRIPCION] like '%MAYORISTA%'
+            )
+            group by EmP.UEN
+                , EmP.CODPRODUCTO
+                , T2.[Volumen Acumulado]
+                , T2.[Mes Actual Vol Proyectado]
+            order by EmP.UEN, EmP.CODPRODUCTO
+    """
+    , conexMSSQL
+)
+df_regalo_liq.fillna(0, inplace=True)
+df_regalo_liq = df_regalo_liq.convert_dtypes()
+
+
+##########################################
+# Subtract gifts from sales of liquid fuel
+##########################################
+
+df_vtas_liq_neto = df_vtas_liq.set_index(["UEN","CODPRODUCTO"])
+df_vtas_liq_neto = df_vtas_liq_neto.add(
+    df_regalo_liq.set_index(["UEN","CODPRODUCTO"])
+    , fill_value=0
+)
+df_vtas_liq_neto = df_vtas_liq_neto.reset_index()
+
+print(df_vtas_liq_neto)
