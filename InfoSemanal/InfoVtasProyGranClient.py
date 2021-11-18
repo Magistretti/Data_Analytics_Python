@@ -2,7 +2,7 @@
 #
 #     INFORME Ventas Proyectadas Grandes Clientes
 #             (Solo Consumos en Baja)
-#       15/11/21 - 
+#       15/11/21 - 17/11/21
 ###################################
 
 import os
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 def pre_VtaProyGranClient(conexMSSQL):
     '''
-    Will calculate and return 
+    Will calculate and return a Dataframe
 
     conexMSSQL: conection to SQL Server
     '''
