@@ -9,7 +9,7 @@ import pathlib
 ubic = str(pathlib.Path(__file__).parent)+"\\"
 
 from DatosTelegram import id_Autorizados, bot_token, testbot_token
-from DatosTelegram import testrumaos, rumaos_info
+from DatosTelegram import testrumaos, rumaos_info, rumaos_info_com
 from runpy import run_path
 import datetime as dt
 import pytz
@@ -41,7 +41,7 @@ if MODE == 1:
     print("\n//////////","USANDO TEST BOT","//////////\n")
 else:
     token = bot_token
-    destinatarios = [rumaos_info]
+    destinatarios = [rumaos_info, rumaos_info_com]
 ######//////////////######
 
 
@@ -494,12 +494,23 @@ def envio_automatico(context):
     fechahoy = dt.datetime.now().strftime("%d/%m/%y")
 
     for ids in destinatarios:
-        context.bot.send_message(ids, text="INFORMES AUTOMÁTICOS " + fechahoy)
-        context.bot.send_photo(
+        if ids in [rumaos_info, testrumaos]:
+            context.bot.send_message(ids, text="INFORMES AUTOMÁTICOS " + fechahoy)
+            context.bot.send_photo(
+                ids
+                , open(filePath_InfoVtaComb+"Info_VolumenVentas.png", "rb")
+                , "Venta Total por Combustible de Ayer"
+            )
+            context.bot.send_photo(
             ids
-            , open(filePath_InfoVtaComb+"Info_VolumenVentas.png", "rb")
-            , "Venta Total por Combustible de Ayer"
-        )
+            , open(find("Info_PenetracionRedMas.png", ubic), "rb")
+            , "Penetración RedMas"
+            )
+            context.bot.send_photo(
+                ids
+                , open(find("Info_VentaLubri.png", ubic), "rb")
+                , "Venta Lubricantes"
+            )
         context.bot.send_photo(
             ids
             , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudores.png", "rb")
@@ -522,16 +533,7 @@ def envio_automatico(context):
                 "Info_Despachos_Camioneros.png", "rb")
             , "Despachos Camioneros"
         )
-        context.bot.send_photo(
-            ids
-            , open(find("Info_PenetracionRedMas.png", ubic), "rb")
-            , "Penetración RedMas"
-        )
-        context.bot.send_photo(
-            ids
-            , open(find("Info_VentaLubri.png", ubic), "rb")
-            , "Venta Lubricantes"
-        )
+        
     print("")
 
 
