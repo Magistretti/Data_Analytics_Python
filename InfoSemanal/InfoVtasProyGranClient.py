@@ -382,7 +382,7 @@ def vtaProyGranClient():
 
     # Path and name for DF image
     ubicacion = str(pathlib.Path(__file__).parent)+"\\"
-    nombreIMG = "Info_VtaProyGranClient_Semanal.png"
+    nombreIMG = "Grandes_Clientes_Baja_Consumo.png"
 
     _df_to_image(df, ubicacion, nombreIMG)
 
