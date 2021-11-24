@@ -81,12 +81,17 @@ df_cheques = pd.read_sql(
 df_cheques = df_cheques.convert_dtypes()
 # print(df_cheques.info())
 # print(df_cheques.head())
+
 ubicacion = str(pathlib.Path(__file__).parent)+"\\"
-writer = pd.ExcelWriter(ubicacion+"output.xlsx")
+
+writer = pd.ExcelWriter(ubicacion+"Cheques_UENs.xlsx")
 df_cheques.to_excel(writer, sheet_name="Cheques", index=False, na_rep="")
-# Auto-adjust columns' width
+
+# Auto-adjust columns width
 for column in df_cheques:
-    column_width = max(df_cheques[column].astype(str).map(len).max(), len(column))
+    column_width = max(df_cheques[column].astype(str).map(len).max()
+        , len(column)
+    )
     col_idx = df_cheques.columns.get_loc(column)
     writer.sheets["Cheques"].set_column(col_idx, col_idx, column_width)
 
