@@ -10,6 +10,7 @@ ubic = str(pathlib.Path(__file__).parent)+"\\"
 
 from DatosTelegram import id_Autorizados, bot_token, testbot_token
 from DatosTelegram import testrumaos, rumaos_info, rumaos_info_com
+from DatosTelegram import rumaos_cheques
 from runpy import run_path
 import datetime as dt
 import pytz
@@ -28,12 +29,13 @@ from functools import wraps
 
 from InfoLubri_y_RedMas.InfoPenetracionRedMas import penetracionRedMas
 from InfoLubri_y_RedMas.InfoLubri import ventaLubri
+from InfoCheques.ChequesAyer import cheques_ayer
 
 #####//////////////######
 # BOT Token selection for testing:
 # 0 = RUMAOS_Info_bot
 # 1 = RUMAOStest_bot
-MODE = 0
+MODE = 1
 
 if MODE == 1:
     token = testbot_token
@@ -430,16 +432,16 @@ def forzar_envio(update, context) -> None:
 
 
 #########################
-# DAILY REPORT
+# DAILY REPORT 
 #########################
 
 # Reset all reports and send them to the designated channel
 def envio_automatico(context):
-    print("\n->Comenzando generación de informes<-")
+    logger.info("\n->Comenzando generación de informes<-")
 
     try:
         run_path(filePath_Info_Morosos+"Morosos.py")
-        print("Info Morosos reseteado")
+        logger.info("Info Morosos reseteado")
     except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info Morosos"
@@ -448,7 +450,7 @@ def envio_automatico(context):
 
     try:
         run_path(filePath_InfoVtaComb+"TotalesPorCombustible.py")
-        print("Info TotalesPorCombustible reseteado")
+        logger.info("Info TotalesPorCombustible reseteado")
     except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info TotalesPorCombustible"
@@ -457,7 +459,7 @@ def envio_automatico(context):
 
     try:
         run_path(filePath_InfoGrandesDeudas+"GrandesDeudas.py")
-        print("Info GrandesDeudas reseteado")
+        logger.info("Info GrandesDeudas reseteado")
     except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info GrandesDeudas"
@@ -466,7 +468,7 @@ def envio_automatico(context):
 
     try:
         run_path(filePath_Info_Despachos_Camioneros+"DespachosCamion.py")
-        print("Info Despachos_Camioneros reseteado")
+        logger.info("Info Despachos_Camioneros reseteado")
     except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info Despachos_Camioneros"
@@ -475,7 +477,7 @@ def envio_automatico(context):
 
     try:
         penetracionRedMas()
-        print("Info Penetracion_RedMas reseteado")
+        logger.info("Info Penetracion_RedMas reseteado")
     except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info Penetracion_RedMas"
@@ -484,7 +486,7 @@ def envio_automatico(context):
     
     try:
         ventaLubri()
-        print("Info Venta_Lubricante reseteado")
+        logger.info("Info Venta_Lubricante reseteado")
     except Exception as e:
         context.bot.send_message(id_Autorizados[0]
             , text="Error al resetear Info Venta_Lubricante"
@@ -494,8 +496,11 @@ def envio_automatico(context):
     fechahoy = dt.datetime.now().strftime("%d/%m/%y")
 
     for ids in destinatarios:
+
+        context.bot.send_message(ids, text="INFORMES AUTOMÁTICOS " + fechahoy)
+
         if ids in [rumaos_info, testrumaos]:
-            context.bot.send_message(ids, text="INFORMES AUTOMÁTICOS " + fechahoy)
+
             context.bot.send_photo(
                 ids
                 , open(filePath_InfoVtaComb+"Info_VolumenVentas.png", "rb")
@@ -511,6 +516,7 @@ def envio_automatico(context):
                 , open(find("Info_VentaLubri.png", ubic), "rb")
                 , "Venta Lubricantes"
             )
+
         context.bot.send_photo(
             ids
             , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudores.png", "rb")
@@ -534,7 +540,37 @@ def envio_automatico(context):
             , "Despachos Camioneros"
         )
         
-    print("")
+    
+
+#########################
+# DAILY REPORT of Checks
+#########################
+
+def envio_reporte_cheques(context):
+
+    logger.info("\n->Comenzando generación de informes<-")
+
+    try:
+        cheques_ayer()
+        logger.info("Info Cheques_Ayer reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info Cheques_Ayer"
+        )
+        logger.error("Error al resetear Cheques_Ayer", exc_info=1)
+
+    fechahoy = dt.datetime.now().strftime("%d/%m/%y")
+
+    context.bot.send_message(
+        chat_id=rumaos_cheques
+        , text="INFORMES AUTOMÁTICOS " + fechahoy
+    )
+
+    context.bot.send_document(
+            rumaos_cheques
+            , open(find("Cheques_UENs.xlsx", ubic), "rb")
+            , "Cheques_UENs.xlsx"
+            )
 
 
 #########################
@@ -585,11 +621,16 @@ def main() -> None:
     ############# TASKs ############
 
     # updater.job_queue.run_repeating(callback_minute, interval=60, first=10)
-    # updater.job_queue.run_once(envio_automatico, 15)
+    # updater.job_queue.run_once(envio_reporte_cheques, 15)
 
     updater.job_queue.run_daily(envio_automatico
         , dt.time(11,0,0,tzinfo=argTime) 
         , name="info_diario"
+    )
+    updater.job_queue.run_daily(envio_reporte_cheques
+        , dt.time(8,0,0,tzinfo=argTime)
+        , days=(0, 1, 2, 3, 4)
+        , name="info_cheques"
     )
 
     # Keep Alive Task
