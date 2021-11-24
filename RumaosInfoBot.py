@@ -35,7 +35,7 @@ from InfoCheques.ChequesAyer import cheques_ayer
 # BOT Token selection for testing:
 # 0 = RUMAOS_Info_bot
 # 1 = RUMAOStest_bot
-MODE = 1
+MODE = 0
 
 if MODE == 1:
     token = testbot_token
