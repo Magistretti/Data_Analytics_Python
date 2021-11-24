@@ -27,7 +27,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-conexMSSQL = conectorMSSQL(login)
 
 ##########################################
 # Get "remitos" of previous week
@@ -38,6 +37,11 @@ def cheques_ayer():
     This function will create the file "Cheques_UENs.xlsx" with a list of
     cheques received since yesterday or 3 days back from now in case of a monday
     '''
+
+    # Timer
+    tiempoInicio = pd.to_datetime("today")
+
+    conexMSSQL = conectorMSSQL(login)
 
     df_cheques = pd.read_sql(
         """
@@ -94,6 +98,15 @@ def cheques_ayer():
         writer.sheets["Cheques"].set_column(col_idx, col_idx, column_width)
 
     writer.save()
+
+    
+    # Timer
+    tiempoFinal = pd.to_datetime("today")
+    logger.info(
+        "\nInfo Red Control Liq"
+        + "\nTiempo de Ejecucion Total: "
+        + str(tiempoFinal-tiempoInicio)
+    )
 
 
 
