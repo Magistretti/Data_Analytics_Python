@@ -302,8 +302,8 @@ def _append_images(listOfImages, direction='horizontal',
 
 def penetracionRMSemanal():
     '''
-    Create several image ".png" of last week percentage of use of RedMás card
-    for liquid fuel and GNC fuel
+    Create image "Info_Penetración_Semanal.png". This image shows last week 
+    percentage of use of RedMás card for liquid fuel and GNC fuel.
     '''
 
     # Timer
