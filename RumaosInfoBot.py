@@ -30,6 +30,10 @@ from functools import wraps
 from InfoLubri_y_RedMas.InfoPenetracionRedMas import penetracionRedMas
 from InfoLubri_y_RedMas.InfoLubri import ventaLubri
 from InfoCheques.ChequesAyer import cheques_ayer
+from InfoSemanal.InfoPenetracionRMSemanal import penetracionRMSemanal
+from InfoSemanal.InfoRedControl import redControlSemanal
+from InfoSemanal.InfoVtaLiqProy import vtaSemanalProy_Liq_GNC
+from InfoSemanal.InfoVtasProyGranClient import vtaProyGranClient
 
 #####//////////////######
 # BOT Token selection for testing:
@@ -548,7 +552,7 @@ def envio_automatico(context):
 
 def envio_reporte_cheques(context):
 
-    logger.info("\n->Comenzando generación de informes<-")
+    logger.info("\n->Comenzando generación de informe cheques<-")
 
     try:
         cheques_ayer()
@@ -571,6 +575,103 @@ def envio_reporte_cheques(context):
             , open(find("Cheques_UENs.xlsx", ubic), "rb")
             , "Cheques_UENs.xlsx"
             )
+
+
+
+#########################
+# WEEKLY REPORT
+#########################
+
+def envio_reporte_semanal(context):
+
+    logger.info("\n->Comenzando generación de informe semanal<-")
+
+    try:
+        penetracionRMSemanal()
+        logger.info("Info penetracionRMSemanal reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info penetracionRMSemanal"
+        )
+        logger.error("Error al resetear penetracionRMSemanal", exc_info=1)
+
+    try:
+        redControlSemanal()
+        logger.info("Info redControlSemanal reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info redControlSemanal"
+        )
+        logger.error("Error al resetear redControlSemanal", exc_info=1)
+
+    try:
+        vtaSemanalProy_Liq_GNC()
+        logger.info("Info vtaSemanalProy_Liq_GNC reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info vtaSemanalProy_Liq_GNC"
+        )
+        logger.error("Error al resetear vtaSemanalProy_Liq_GNC", exc_info=1)
+
+    try:
+        vtaProyGranClient()
+        logger.info("Info vtaProyGranClient reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info vtaProyGranClient"
+        )
+        logger.error("Error al resetear vtaProyGranClient", exc_info=1)
+
+
+    weekStart = (dt.date.today()-dt.timedelta(days=7)).strftime("%d/%m/%y")
+    weekEnd = (dt.date.today()-dt.timedelta(days=1)).strftime("%d/%m/%y")
+
+
+    context.bot.send_message(
+        chat_id=rumaos_cheques
+        , text="INFORMES AUTOMÁTICOS SEMANALES\n" 
+            + "PERÍODO "
+            + weekStart
+            + " AL "
+            + weekEnd
+    )
+
+
+    context.bot.send_photo(
+            rumaos_info
+            , open(find("Info_RedControlLiq_Semanal.png", ubic), "rb")
+            , "Red Control Líquido"
+        )
+
+    context.bot.send_document(
+            rumaos_info
+            , open(find("Grandes_Clientes_Baja_Consumo.pdf", ubic), "rb")
+            , "Grandes_Clientes_Baja_Consumo.pdf"
+        )
+
+    context.bot.send_photo(
+            rumaos_info
+            , open(find("Info_VtaLiquido_Semanal.png", ubic), "rb")
+            , "Venta de Líquidos Proyectado"
+        )
+
+    context.bot.send_photo(
+            rumaos_info
+            , open(find("Info_GrupoLiq_Semanal.png", ubic), "rb")
+            , "Venta Gasóleos/Naftas Proyectado"
+        )
+
+    context.bot.send_photo(
+            rumaos_info
+            , open(find("Info_VtaGNC_Semanal.png", ubic), "rb")
+            , "Venta de GNC Proyectado"
+        )
+
+    context.bot.send_photo(
+            rumaos_info
+            , open(find("Info_Penetración_Semanal.png", ubic), "rb")
+            , "Penetración RedMás Semanal"
+        )
 
 
 #########################
