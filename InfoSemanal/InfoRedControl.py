@@ -463,7 +463,7 @@ ARGS:
             titulo
             + "<br>"
             + "Semana Actual "
-            + ((pd.to_datetime("today")-pd.to_timedelta(8,"days"))
+            + ((pd.to_datetime("today")-pd.to_timedelta(7,"days"))
             .strftime("%d/%m/%y"))
             + " al "
             + ((pd.to_datetime("today")-pd.to_timedelta(1,"days"))
