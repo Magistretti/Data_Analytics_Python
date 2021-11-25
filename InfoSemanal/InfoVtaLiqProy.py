@@ -680,7 +680,10 @@ def _append_images(listOfImages, direction='horizontal',
 def vtaSemanalProy_Liq_GNC():
     '''
     Create several image ".png" of the actual and forecasted sales of
-    liquid fuel and GNC fuel
+    liquid fuel and GNC fuel:
+    "Info_VtaLiquido_Semanal.png"
+    "Info_GrupoLiq_Semanal.png"
+    "Info_VtaGNC_Semanal.png"
     '''
 
     # Timer
