@@ -47,12 +47,13 @@ def cheques_ayer():
         """
         SET NOCOUNT ON --Needed for Pandas query due to temp list @lista
 
-        DECLARE @fecha as date
-
-        IF DATENAME(WEEKDAY,GETDATE()) = 'miércoles'
-            SET @fecha = dateadd(DAY,-3,cast(getdate() as date))
+        DECLARE @fecha as smalldatetime
+        -- Filtering by datetime >= @fecha will go from 8 AM of previous day
+        -- to the time of the report
+        IF DATENAME(WEEKDAY,GETDATE()) = 'lunes'
+            SET @fecha = dateadd(HOUR,8,cast(dateadd(DAY,-3,cast(getdate() as date)) as datetime))
         ELSE
-            SET @fecha = dateadd(DAY,-1,cast(getdate() as date))
+            SET @fecha = dateadd(HOUR,8,cast(dateadd(DAY,-1,cast(getdate() as date)) as datetime))
 
         SELECT
             RTRIM(CR.[UEN]) AS 'UEN'
@@ -76,7 +77,7 @@ def cheques_ayer():
         left join Rumaos.dbo.Vendedores as V
             ON FC.NROVEND = V.NROVEND
         where (CR.mediopago = 4 OR CR.nrocheque <> 0)
-        and CAST(RV.FECHASQL as date) >= @fecha
+        and RV.FECHASQL >= @fecha
         order by CR.UEN,RV.FECHASQL
         """
             ,conexMSSQL)
