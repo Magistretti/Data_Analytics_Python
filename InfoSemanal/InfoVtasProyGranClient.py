@@ -310,7 +310,7 @@ ARGS:
         #     else "" for i in x]
         #     , axis=1)
 
-    #Gradient color for column "Intermensual %" without affecting row "TOTAL"
+    #Gradient color for column "Intermensual %"
     resultado = resultado.background_gradient(
         cmap="RdYlGn" # Red->Yellow->Green
         ,vmin=-1
