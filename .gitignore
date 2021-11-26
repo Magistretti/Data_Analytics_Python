@@ -10,3 +10,5 @@ errorLog*.txt
 bot_activity.*
 *.pdf
 Cheques_UENs.xlsx
+quickstart.py
+*.json
