@@ -736,7 +736,7 @@ def main() -> None:
     )
     updater.job_queue.run_daily(envio_reporte_semanal
         , dt.time(12,0,0,tzinfo=argTime)
-        , days=(4)
+        , days=[4]
         , name="info_semanal"
     )
 
