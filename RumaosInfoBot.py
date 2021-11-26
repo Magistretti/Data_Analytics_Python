@@ -627,16 +627,16 @@ def envio_reporte_semanal(context):
     weekEnd = (dt.date.today()-dt.timedelta(days=1)).strftime("%d/%m/%y")
 
 
+    chat_id = rumaos_info
+
     context.bot.send_message(
-        chat_id=rumaos_cheques
+        chat_id=chat_id
         , text="INFORMES AUTOMÁTICOS SEMANALES\n" 
             + "PERÍODO "
             + weekStart
             + " AL "
             + weekEnd
     )
-
-    chat_id = rumaos_info
 
     context.bot.send_photo(
             chat_id
