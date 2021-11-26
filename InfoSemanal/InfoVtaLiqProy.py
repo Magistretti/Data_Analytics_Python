@@ -337,7 +337,7 @@ def _get_df(conexMSSQL):
     df_vtas_liq_neto = df_vtas_liq_neto.reset_index()
 
     # GNC Fuel
-    df_vtas_GNC_neto = df_vtas_liq.set_index(["UEN","CODPRODUCTO"])
+    df_vtas_GNC_neto = df_vtas_GNC.set_index(["UEN","CODPRODUCTO"])
     df_vtas_GNC_neto = df_vtas_GNC_neto.add(
         df_regalo_GNC.set_index(["UEN","CODPRODUCTO"])
         , fill_value=0
