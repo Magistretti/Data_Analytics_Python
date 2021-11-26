@@ -86,19 +86,40 @@ def cheques_ayer():
     # print(df_cheques.head())
 
     ubicacion = str(pathlib.Path(__file__).parent)+"\\"
+    nombreExcel = "Cheques_UENs.xlsx"
 
-    writer = pd.ExcelWriter(ubicacion+"Cheques_UENs.xlsx")
-    df_cheques.to_excel(writer, sheet_name="Cheques", index=False, na_rep="")
+    # Removing .xlsx file if exists to avoid permission error when
+    # creating new file
+    if os.path.exists(ubicacion + nombreExcel):
+        os.remove(ubicacion + nombreExcel)
 
-    # Auto-adjust columns width
-    for column in df_cheques:
-        column_width = max(df_cheques[column].astype(str).map(len).max()
-            , len(column)
-        )
-        col_idx = df_cheques.columns.get_loc(column)
-        writer.sheets["Cheques"].set_column(col_idx, col_idx, column_width)
+        writer = pd.ExcelWriter(ubicacion + nombreExcel)
+        df_cheques.to_excel(writer, sheet_name="Cheques", index=False, na_rep="")
 
-    writer.save()
+        # Auto-adjust columns width
+        for column in df_cheques:
+            column_width = max(df_cheques[column].astype(str).map(len).max()
+                , len(column)
+            )
+            col_idx = df_cheques.columns.get_loc(column)
+            writer.sheets["Cheques"].set_column(col_idx, col_idx, column_width)
+
+        writer.save()
+        
+    else:
+        writer = pd.ExcelWriter(ubicacion + nombreExcel)
+        df_cheques.to_excel(writer, sheet_name="Cheques", index=False, na_rep="")
+
+        # Auto-adjust columns width
+        for column in df_cheques:
+            column_width = max(df_cheques[column].astype(str).map(len).max()
+                , len(column)
+            )
+            col_idx = df_cheques.columns.get_loc(column)
+            writer.sheets["Cheques"].set_column(col_idx, col_idx, column_width)
+            
+        writer.save()
+    
 
     
     # Timer

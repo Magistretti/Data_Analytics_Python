@@ -391,9 +391,15 @@ def vtaProyGranClient():
     imgRGBA = Image.open(ubicacion+nombreIMG)
     imRGB = Image.new('RGB', imgRGBA.size, (255, 255, 255))
     imRGB.paste(imgRGBA, mask=imgRGBA.split()[3])
-    # Saving has a PDF
+
     nombrePDF = "Grandes_Clientes_Baja_Consumo.pdf"
-    imRGB.save(ubicacion+nombrePDF, "PDF", resolution=90.0, save_all=True)
+
+    # Saving has a PDF and avoiding permission error
+    if os.path.exists(ubicacion + nombrePDF):
+        os.remove(ubicacion + nombrePDF)
+        imRGB.save(ubicacion + nombrePDF, "PDF", resolution=90.0, save_all=True)
+    else:
+        imRGB.save(ubicacion + nombrePDF, "PDF", resolution=90.0, save_all=True)
     
 
     # Timer
