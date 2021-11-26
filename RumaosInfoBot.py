@@ -436,7 +436,7 @@ def forzar_envio(update, context) -> None:
 
 
 #########################
-# DAILY REPORT 
+# DAILY REPORT IVO
 #########################
 
 # Reset all reports and send them to the designated channel
@@ -636,39 +636,40 @@ def envio_reporte_semanal(context):
             + weekEnd
     )
 
+    chat_id = rumaos_info
 
     context.bot.send_photo(
-            rumaos_info
+            chat_id
             , open(find("Info_RedControlLiq_Semanal.png", ubic), "rb")
             , "Red Control Líquido"
         )
 
     context.bot.send_document(
-            rumaos_info
+            chat_id
             , open(find("Grandes_Clientes_Baja_Consumo.pdf", ubic), "rb")
             , "Grandes_Clientes_Baja_Consumo.pdf"
         )
 
     context.bot.send_photo(
-            rumaos_info
+            chat_id
             , open(find("Info_VtaLiquido_Semanal.png", ubic), "rb")
             , "Venta de Líquidos Proyectado"
         )
 
     context.bot.send_photo(
-            rumaos_info
+            chat_id
             , open(find("Info_GrupoLiq_Semanal.png", ubic), "rb")
             , "Venta Gasóleos/Naftas Proyectado"
         )
 
     context.bot.send_photo(
-            rumaos_info
+            chat_id
             , open(find("Info_VtaGNC_Semanal.png", ubic), "rb")
             , "Venta de GNC Proyectado"
         )
 
     context.bot.send_photo(
-            rumaos_info
+            chat_id
             , open(find("Info_Penetración_Semanal.png", ubic), "rb")
             , "Penetración RedMás Semanal"
         )
@@ -732,6 +733,11 @@ def main() -> None:
         , dt.time(8,0,0,tzinfo=argTime)
         , days=(0, 1, 2, 3, 4)
         , name="info_cheques"
+    )
+    updater.job_queue.run_daily(envio_reporte_semanal
+        , dt.time(12,0,0,tzinfo=argTime)
+        , days=(4)
+        , name="info_semanal"
     )
 
     # Keep Alive Task
