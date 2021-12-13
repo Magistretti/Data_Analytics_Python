@@ -11,6 +11,7 @@ ubic = str(pathlib.Path(__file__).parent)+"\\"
 from DatosTelegram import id_Autorizados, bot_token, testbot_token
 from DatosTelegram import testrumaos, rumaos_info, rumaos_info_com
 from DatosTelegram import rumaos_cheques
+from DatosTelegram import lapuchesky
 from runpy import run_path
 import datetime as dt
 import pytz
@@ -543,7 +544,30 @@ def envio_automatico(context):
                 "Info_Despachos_Camioneros.png", "rb")
             , "Despachos Camioneros"
         )
-        
+
+
+
+#########################
+# DAILY REPORT Lapuchesky
+#########################
+
+def envio_reporte_lapuchesky(context):
+
+    logger.info("\n->Comenzando generación de informe Lapuchesky<-")
+
+    fechahoy = dt.datetime.now().strftime("%d/%m/%y")
+
+    context.bot.send_message(
+        chat_id=rumaos_cheques
+        , text="INFORMES AUTOMÁTICOS " + fechahoy
+    )
+
+    context.bot.send_photo(
+            lapuchesky
+            , open(find("Info_PenetracionRedMas.png", ubic), "rb")
+            , "Penetración RedMas"
+            )
+    
     
 
 #########################
@@ -728,6 +752,10 @@ def main() -> None:
     updater.job_queue.run_daily(envio_automatico
         , dt.time(11,0,0,tzinfo=argTime) 
         , name="info_diario"
+    )
+    updater.job_queue.run_daily(envio_reporte_lapuchesky
+        , dt.time(11,15,0,tzinfo=argTime) 
+        , name="info_lapuchesky"
     )
     updater.job_queue.run_daily(envio_reporte_cheques
         , dt.time(8,0,0,tzinfo=argTime)
