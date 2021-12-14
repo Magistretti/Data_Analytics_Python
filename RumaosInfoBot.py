@@ -558,7 +558,7 @@ def envio_reporte_lapuchesky(context):
     fechahoy = dt.datetime.now().strftime("%d/%m/%y")
 
     context.bot.send_message(
-        chat_id=rumaos_cheques
+        chat_id=lapuchesky
         , text="INFORMES AUTOMÁTICOS " + fechahoy
     )
 
