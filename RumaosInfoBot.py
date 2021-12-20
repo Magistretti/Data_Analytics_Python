@@ -103,7 +103,7 @@ DATEFMT = "%Y-%m-%d %H:%M:%S"
 if not os.path.exists(ubic + "log"):
     os.mkdir(ubic + "log")
 
-# set up logging to file - see previous section for more details
+# set up logging to file
 logging.basicConfig(level=logging.INFO,
                     format=FORMAT,
                     datefmt=DATEFMT)
