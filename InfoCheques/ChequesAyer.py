@@ -125,7 +125,7 @@ def cheques_ayer():
     # Timer
     tiempoFinal = pd.to_datetime("today")
     logger.info(
-        "\nInfo Red Control Liq"
+        "\nInfo Cheques Ayer"
         + "\nTiempo de Ejecucion Total: "
         + str(tiempoFinal-tiempoInicio)
     )
