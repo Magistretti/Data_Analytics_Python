@@ -75,7 +75,7 @@ df_cuentasDeudoras = df_cuentasDeudoras.convert_dtypes()
 # -Get data not older than a year back from today
 #########
 
-fechaAñoAtras = (tiempoInicio - pd.Timedelta(365, unit="d"))\
+fechaAñoAtras = (tiempoInicio - pd.Timedelta(65, unit="d"))\
     .strftime("'%Y%m%d'")
 
 df_remitos = pd.read_sql(
@@ -136,14 +136,25 @@ df_VentaSemanalPorCuenta = df_remitos7Dias[["NROCLIENTE","NOMBRE","IMPORTE"]]\
 
 
 ############
+# -Merge df_remitosVentasPorCliente with df_cuentasDeudoras to get 
+# the "SALDOCUENTA" column
 # Merging df_primerRemitoPorCuenta, df_ultimoRemitoPorCuenta, 
 # df_ventaPesosPorCuenta and df_VentaSemanalPorCuenta into a new
 # dataframe, df_remitosVentasPorCliente
 ############
 
+
 df_remitosVentasPorCliente = pd.merge(
+    df_cuentasDeudoras[["NROCLIENTE","NOMBRE","SALDOCUENTA"]],
     df_primerRemitoPorCuenta,
+    how="left",
+    on=["NROCLIENTE","NOMBRE"]
+)
+
+df_remitosVentasPorCliente = pd.merge(
+    df_remitosVentasPorCliente,
     df_ultimoRemitoPorCuenta,
+    how="left",
     on=["NROCLIENTE","NOMBRE"],
     suffixes=("_PrimerRemito","_UltimoRemito")
 )
@@ -151,6 +162,7 @@ df_remitosVentasPorCliente = pd.merge(
 df_remitosVentasPorCliente = pd.merge(
     df_remitosVentasPorCliente,
     df_ventaPesosPorCuenta,
+    how="left",
     on=["NROCLIENTE","NOMBRE"]
 )
 
@@ -161,15 +173,16 @@ df_remitosVentasPorCliente = pd.merge(
     on=["NROCLIENTE","NOMBRE"],
     suffixes=("","_Semanal")
 )
-df_remitosVentasPorCliente.fillna(0, inplace=True)
-df_remitosVentasPorCliente.reset_index(inplace=True)
-print(df_remitosVentasPorCliente[df_remitosVentasPorCliente["NROCLIENTE"]=="101228"])
-############################################################
-############################################################
-############################################################
-############################################################
-############################################################
-raise SystemExit()
+
+# Filling NaNs and NaTs found in accounts without sales in the last year
+df_remitosVentasPorCliente.fillna({
+    "FECHASQL_PrimerRemito": fechaHoy
+    ,"FECHASQL_UltimoRemito": fechaHoy
+    ,"IMPORTE": 0
+    ,"IMPORTE_Semanal": 0
+}, inplace=True)
+
+
 #######
 # Creating columns: 
 #   -"Dias Entre 1er y Ultimo Remito" 
@@ -204,8 +217,6 @@ df_remitosVentasPorCliente["Venta $ Prom Ult 7 Dias"] = \
 
 
 #############
-# -Merge df_remitosVentasPorCliente with df_cuentasDeudoras to get 
-# the "SALDOCUENTA" column
 # -Create column "Dias Venta Adeud" = SALDOCUENTA/"Mayor Vta $ Prom Diaria"
 # -"Mayor Vta $ Prom Diaria" is the biggest of "Venta $ Prom Diaria" and
 #   "Venta $ Prom Ult 7 Dias"
@@ -213,27 +224,22 @@ df_remitosVentasPorCliente["Venta $ Prom Ult 7 Dias"] = \
 #   IF("Dias Venta Adeud" < 30, "Moroso","Excedido"))
 #############
 
-df_remitosVentasPorCliente = pd.merge(
-    df_remitosVentasPorCliente,
-    df_cuentasDeudoras[["NROCLIENTE","NOMBRE","SALDOCUENTA"]],
-    on=["NROCLIENTE","NOMBRE"]
-)
 
-
-def biggestOf2(a,b):
-    if a > b:
-        return a
+def _diasVtaAdeud(saldocuenta, vtaPromDia, vtaProm7Dia):
+    if vtaPromDia == vtaProm7Dia == 0:
+        return 365
+    elif vtaPromDia > vtaProm7Dia:
+        return round(saldocuenta * (-1) / vtaPromDia)
     else:
-        return b
+        return round(saldocuenta * (-1) / vtaProm7Dia)
 
 
 df_remitosVentasPorCliente["Dias Venta Adeud"] = \
     df_remitosVentasPorCliente.apply(
-        lambda row: round(row["SALDOCUENTA"] * (-1) / 
-            biggestOf2(
-                row["Venta $ Prom Diaria"],
-                row["Venta $ Prom Ult 7 Dias"]
-            )
+        lambda row: _diasVtaAdeud(
+            row["SALDOCUENTA"]
+            , row["Venta $ Prom Diaria"]
+            , row["Venta $ Prom Ult 7 Dias"]
         )
         , axis= 1
     )
@@ -254,7 +260,7 @@ def condDeuda(diasAdeudados):
 df_remitosVentasPorCliente["Cond Deuda Cliente"] = \
     df_remitosVentasPorCliente.apply(
         lambda row: "INCOBRABLE"
-            if row["NROCLIENTE"] == "101228"
+            if row["NROCLIENTE"] in ("101228","100151","101793","100357")
             else condDeuda(row["Dias Venta Adeud"])
         , axis= 1
     )
