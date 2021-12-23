@@ -54,9 +54,10 @@ conexMSSQL = conectorMSSQL(login)
 df_cuentasDeudoras = pd.read_sql(
     """
         SELECT 
-            CAST(FacCli.[NROCLIPRO] AS VARCHAR) as NROCLIENTE
+            CAST(FacCli.[NROCLIPRO] AS VARCHAR) as 'NROCLIENTE'
             ,FacCli.[NOMBRE]
-            ,FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU as SALDOCUENTA
+            ,FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU as 'SALDOCUENTA'
+            ,CAST(FacCli.FEULTVTASQL as date) as 'FechaUltVta'
         FROM [Rumaos].[dbo].[FacCli] WITH (NOLOCK)
         where ListaSaldoCC = 1
             and (FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU) < -1000;
@@ -75,7 +76,7 @@ df_cuentasDeudoras = df_cuentasDeudoras.convert_dtypes()
 # -Get data not older than a year back from today
 #########
 
-fechaAñoAtras = (tiempoInicio - pd.Timedelta(65, unit="d"))\
+fechaAñoAtras = (tiempoInicio - pd.Timedelta(90, unit="d"))\
     .strftime("'%Y%m%d'")
 
 df_remitos = pd.read_sql(
@@ -213,21 +214,24 @@ df_remitosVentasPorCliente["Venta $ Prom Ult 7 Dias"] = \
         , axis= 1
     )
 
-#print(df_remitosVentasPorCliente.head())
+print(df_remitosVentasPorCliente.head())
 
 
 #############
 # -Create column "Dias Venta Adeud" = SALDOCUENTA/"Mayor Vta $ Prom Diaria"
 # -"Mayor Vta $ Prom Diaria" is the biggest of "Venta $ Prom Diaria" and
 #   "Venta $ Prom Ult 7 Dias"
-# -Create column "Cond Deuda Cliente" = IF("Dias Venta Adeud" < 20, "Normal",
-#   IF("Dias Venta Adeud" < 30, "Moroso","Excedido"))
+# -Create column "Cond Deuda Cliente" = 
+#   IF("Dias Venta Adeud" < 20, "Normal",
+#       IF("Dias Venta Adeud" < 30, "Excedido",
+#            IF("Dias Venta Adeud" < 60, "Moroso",
+#                "PREJUDICIAL")))
 #############
 
 
 def _diasVtaAdeud(saldocuenta, vtaPromDia, vtaProm7Dia):
     if vtaPromDia == vtaProm7Dia == 0:
-        return 365
+        return 100
     elif vtaPromDia > vtaProm7Dia:
         return round(saldocuenta * (-1) / vtaPromDia)
     else:
@@ -248,20 +252,15 @@ def condDeuda(diasAdeudados):
     if diasAdeudados < 20:
         return "Normal"
     elif diasAdeudados < 30:
+        return "Excedido"
+    elif diasAdeudados < 60:
         return "Moroso"
     else:
-        return "Excedido"
-######################################################
-######################################################
-######################################################
-######################################################
-######################################################
-# TODO: Apply "INCOBRABLE" tag to certain "NROCLIENTE"
+        return "PREJUDICIAL"
+
 df_remitosVentasPorCliente["Cond Deuda Cliente"] = \
     df_remitosVentasPorCliente.apply(
-        lambda row: "INCOBRABLE"
-            if row["NROCLIENTE"] in ("101228","100151","101793","100357")
-            else condDeuda(row["Dias Venta Adeud"])
+        lambda row: condDeuda(row["Dias Venta Adeud"])
         , axis= 1
     )
 
@@ -305,7 +304,9 @@ df_condicionCuentasRetrasadas= \
 # have a red background
 
 def excedidoFondoRojo(dataframe):
-    return ["background-color: red" if valor == "Excedido" 
+    return ["background-color: orange" if valor == "Excedido" 
+        else "background-color: red" if valor == "PREJUDICIAL"
+        else "background-color: yellow" if valor == "Moroso"
         else "background-color: default" for valor in dataframe]
 
 df_conEstilo_condCtaRetrasadas = \
