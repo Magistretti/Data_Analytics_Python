@@ -13,6 +13,7 @@ sys.path.insert(0,str(pathlib.Path(__file__).parent.parent))
 
 import pandas as pd
 import dataframe_image as dfi
+from openpyxl import load_workbook
 
 from DatosLogin import login
 from Conectores import conectorMSSQL
@@ -144,7 +145,7 @@ def _fondoColor(dataframe):
         else "background-color: yellow" if valor == "2-Excedido"
         else "background-color: orange" if valor == "3-Moroso"
         else "background-color: red" if valor == "4-PREJUDICIAL" 
-        else "background-color: white" for valor in dataframe]
+        else "background-color: black" for valor in dataframe]
 
 
 def _estiladorVtaTitulo(
@@ -269,6 +270,9 @@ def condicionDeudores():
     # Transform DF to get a list of clients in Excel
     #############################
 
+    nombreExcel = "ClientesDeudores.xlsx"
+
+
     df_ctas_Para_Excel = df_cuentasDeudoras
 
     # Will cast both "Días" columns as a string to be able to fill with ""
@@ -290,7 +294,7 @@ def condicionDeudores():
     ).apply(_fondoColor, subset=["Cond Deuda Cliente"])
 
     # Print list of clients to Excel file
-    writer = pd.ExcelWriter(ubicacion+"ClientesDeudores.xlsx"
+    writer = pd.ExcelWriter(ubicacion + nombreExcel
         , engine="xlsxwriter"
     )
 
@@ -315,12 +319,18 @@ def condicionDeudores():
             , col_idx
             , column_length + 1
         )
-# "$"\ #,##0;[Red]\-"$"\ #,##0
-    # format1 = workbook.add_format({#'num_format': '#,##0_;-#,##0',
-    #     "bold": True})
-    # writer.sheets["ClientesDeudores"].set_column("C:C", None, format1)
 
     writer.save()
+
+    # Improve format of "SALDOCUENTA" column in Excel
+    wBook = load_workbook(ubicacion + nombreExcel)
+    wSheet = wBook.active
+    col = wSheet["C"] # Column "SALDOCUENTA"
+    for cell in col:
+        # Will add thousand separator, negatives in red and "$" symbol
+        cell.number_format='"$"\ #,##0;[Red]\-"$"\ #,##0'
+    wBook.save(ubicacion + nombreExcel)
+    wBook.close()
 
 
 
@@ -361,6 +371,14 @@ def condicionDeudores():
     ).apply(_fondoColor, subset=["Condición"])
 
     #display(df_saldosCondicion_Estilo)
+
+    # Get image from df_saldosCondicion_Estilo
+    _df_to_image(
+        df_saldosCondicion_Estilo
+        ,ubicacion
+        ,"DeudaComercial.png"
+    )
+
 
 
         
