@@ -76,7 +76,7 @@ def _get_df(conexMSSQL):
                     , DATEDIFF(DAY,MAX(CAST(FRD.[FECHASQL] as date)),MIN(CAST(FRD.[FECHASQL] as date)))
                 )) as int) as 'Días Venta Adeud'
 
-            , DATEDIFF(DAY, MAX(CAST(FRD.[FECHASQL] as date)), CAST(GETDATE()-1 as date)) as 'Días Desde Última Compra'
+            , DATEDIFF(DAY, MAX(CAST(FRD.[FECHASQL] as date)), CAST(GETDATE() as date)) as 'Días Desde Última Compra'
 
             , ISNULL(RTRIM(Vend.NOMBREVEND),'') as 'Vendedor'
 
@@ -89,7 +89,7 @@ def _get_df(conexMSSQL):
             where FRD.NROCLIENTE > '100000'
                 AND (Cli.SALDOPREPAGO - Cli.SALDOREMIPENDFACTU) < -1000
                 and Cli.ListaSaldoCC = 1
-                and FECHASQL >= '20210101' and FECHASQL < CAST(GETDATE() as date)
+                and FECHASQL >= '20210101' and FECHASQL <= CAST(GETDATE() as date)
 
             group by FRD.NROCLIENTE, Cli.NOMBRE, Vend.NOMBREVEND
             order by MIN(Cli.SALDOPREPAGO - Cli.SALDOREMIPENDFACTU)
@@ -171,7 +171,7 @@ ARGS:
         .set_caption(
             titulo
             + "<br>"
-            + ((pd.to_datetime("today")-pd.to_timedelta(1,"days"))
+            + (pd.to_datetime("today")
             .strftime("%d/%m/%y"))
         ) \
         .set_properties(subset=list_Col_Num + list_Col_Perc
@@ -241,7 +241,8 @@ def _df_to_image(df, ubicacion, nombre):
 
 def condicionDeudores():
     """
-
+    Create an image of the debtors grouped by state of debt and an Excel file
+    with each debtor and debt
     """
 
     # Timer
