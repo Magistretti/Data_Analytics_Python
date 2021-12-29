@@ -14,7 +14,7 @@ sys.path.insert(0,str(pathlib.Path(__file__).parent.parent))
 import pandas as pd
 import dataframe_image as dfi
 
-from DatosLogin import loginSGFin
+from DatosLogin import login, loginSGFin
 from Conectores import conectorMSSQL
 
 import logging
@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 
-def _get_df(conexMSSQL):
+def _get_df(conexSGES, conexSGFin):
+
+    # Get state of the treasuries in a df from a SQL query
     df_arqueos = pd.read_sql(
         """
         -- EN ESTA CONSULTA SE REALIZA UN APPEND DE LAS TABLAS [SGFIN_IngresoCaja] Y 
@@ -162,16 +164,106 @@ def _get_df(conexMSSQL):
         group by cast(arq.[Fecha] as date), box.UEN
         order by box.UEN
         """
-    , conexMSSQL
+        , conexSGFin
     )
 
     df_arqueos = df_arqueos.convert_dtypes()
 
     df_arqueos.drop(columns=["Fecha"], inplace=True)
-
+    
+    # Get "TOTAL" row
     df_arqueos.loc[df_arqueos.index[-1]+1] = df_arqueos.sum(numeric_only=True)
-
+    # Rename the NA in the "UEN" column to "TOTAL"
     df_arqueos.fillna("TOTAL", inplace=True)
+
+
+    # Get pending collections of each treasury into a df from a SQL query
+    df_RecPendiente = pd.read_sql(
+        """
+        -- UNION de las recaudaciones pendientes de los distintos negocios
+        -- de cada UEN en una sola tabla agrupada por UEN
+
+        WITH uniontable AS
+        (
+            SELECT -- Rec Pend Playa
+                RTRIM([UEN]) as 'UEN'
+                ,ROUND(SUM([VTATOTIMP]-[VTACTACTEIMP]-[VTAADELIMP]), 0) as 'Rec Pendiente'
+
+            FROM [Rumaos].[dbo].[VtaTurno] with (NOLOCK)
+            WHERE NRORECA = '0'
+                AND VTATOTIMP > '0'
+            Group By UEN
+
+            UNION ALL
+
+            SELECT -- Rec Pend SC
+                RTRIM([UEN]) as 'UEN'
+                ,ROUND(SUM(
+                    ([VTATOTIMP] + IIF(VTATOTIMP = 0 and RECTEORICA <> 0, RECTEORICA, 0))
+                    ), 0
+                ) as 'Rec Pend SC'
+
+            FROM [Rumaos].[dbo].[SCTurnos] with (NOLOCK)
+            WHERE NRORECA = '0'
+                AND (VTATOTIMP > '0' or RECTEORICA > '0')
+            Group By UEN
+
+            UNION ALL
+
+            SELECT -- Rec Pend Pana
+                RTRIM([UEN]) as 'UEN'
+                ,ROUND(SUM([VTATOTAL]), 0) as 'Rec Pend Pana'
+
+            FROM [Rumaos].[dbo].[PanTurnos] with (NOLOCK)
+            WHERE NRORECA = '0'
+                AND VTATOTAL > '0'
+            Group By UEN
+
+            UNION ALL
+
+            SELECT -- Rec Pend BA
+                RTRIM([UEN]) as 'UEN'
+                ,ROUND(SUM([VTATOTIMP]), 0) as 'Rec Pend BA'
+
+            FROM [Rumaos].[dbo].[BATurnos] with (NOLOCK)
+            WHERE NRORECA = '0'
+                AND VTATOTIMP > '0'
+            Group By UEN
+        )
+
+
+        SELECT -- Se agrega fila de totales con una unión sobre la misma tabla
+            total.UEN
+            ,total.[Rec Pendiente]
+        FROM(
+            SELECT
+                uniontable.UEN
+                ,CAST(SUM(uniontable.[Rec Pendiente]) as int) as 'Rec Pendiente'
+            FROM uniontable
+            Group By UEN
+
+            UNION ALL
+
+            SELECT
+                'UEN' = 'TOTAL'
+                ,CAST(SUM(uniontable.[Rec Pendiente]) as int) as 'Rec Pendiente'
+            FROM uniontable
+        ) as total
+        """
+        , conexSGES
+    )
+
+    # Merge df_RecPendiente with df_arqueos
+    df_arqueos = pd.merge(
+        df_arqueos,
+        df_RecPendiente,
+        how="left",
+        on=["UEN"]
+    )
+
+    # Replace the NaNs with zeroes
+    df_arqueos.fillna(0, inplace=True)
+
 
     return df_arqueos
 
@@ -282,11 +374,13 @@ def arqueos():
     # Timer
     tiempoInicio = pd.to_datetime("today")
 
+    # Connection to SGES DB
+    conexSGES = conectorMSSQL(login)
     # Connection to SGFin DB
-    conexMSSQL = conectorMSSQL(loginSGFin)
+    conexSGFin = conectorMSSQL(loginSGFin)
 
     # Get DF
-    df_arqueos = _get_df(conexMSSQL)
+    df_arqueos = _get_df(conexSGES, conexSGFin)
 
     # Styling of DF
     df_arqueos_Estilo = _estiladorVtaTitulo(
@@ -297,6 +391,7 @@ def arqueos():
             , "Traslados"
             , "EGRESOS"
             , "Saldo Final"
+            , "Rec Pendiente"
         ], titulo="ARQUEOS"
     )
 
