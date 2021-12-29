@@ -10,7 +10,7 @@ ubic = str(pathlib.Path(__file__).parent)+"\\"
 
 from DatosTelegram import id_Autorizados, bot_token, testbot_token
 from DatosTelegram import testrumaos, rumaos_info, rumaos_info_com
-from DatosTelegram import rumaos_cheques
+from DatosTelegram import rumaos_cheques, rumaos_info_CFO
 from DatosTelegram import lapuchesky
 from runpy import run_path
 import datetime as dt
@@ -30,11 +30,18 @@ from functools import wraps
 
 from InfoLubri_y_RedMas.InfoPenetracionRedMas import penetracionRedMas
 from InfoLubri_y_RedMas.InfoLubri import ventaLubri
+
 from InfoCheques.ChequesAyer import cheques_ayer
+
 from InfoSemanal.InfoPenetracionRMSemanal import penetracionRMSemanal
 from InfoSemanal.InfoRedControl import redControlSemanal
 from InfoSemanal.InfoVtaLiqProy import vtaSemanalProy_Liq_GNC
 from InfoSemanal.InfoVtasProyGranClient import vtaProyGranClient
+
+from InfoKamel.ArqueosSGFin import arqueos
+from InfoKamel.ChequesSaldosSGFin import chequesSaldos
+from InfoKamel.DeudaComercial import condicionDeudores
+
 
 #####//////////////######
 # BOT Token selection for testing:
@@ -603,6 +610,77 @@ def envio_reporte_cheques(context):
 
 
 #########################
+# DAILY REPORT "CFO"
+#########################
+
+# arqueos
+# chequesSaldos
+# condicionDeudores
+
+
+def envio_reporte_CFO(context):
+
+    logger.info("\n->Comenzando generación de informe CFO<-")
+
+    try:
+        arqueos()
+        logger.info("Info Arqueos reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info Arqueos"
+        )
+        logger.error("Error al resetear Arqueos", exc_info=1)
+
+    try:
+        chequesSaldos()
+        logger.info("Info chequesSaldos reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info chequesSaldos"
+        )
+        logger.error("Error al resetear chequesSaldos", exc_info=1)
+
+    try:
+        condicionDeudores()
+        logger.info("Info condicionDeudores reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info condicionDeudores"
+        )
+        logger.error("Error al resetear condicionDeudores", exc_info=1)
+
+
+    fechahoy = dt.datetime.now().strftime("%d/%m/%y")
+
+    # Where to send the things
+    chat_id = rumaos_info_CFO
+
+    context.bot.send_message(
+        chat_id=chat_id
+        , text="INFORMES AUTOMÁTICOS " + fechahoy
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(find("Arqueos.png", ubic), "rb")
+        , "Arqueos.png"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(find("ChequesSaldos.png", ubic), "rb")
+        , "ChequesSaldos.png"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(find("DeudaComercial.png", ubic), "rb")
+        , "DeudaComercial.png"
+    )
+
+
+
+#########################
 # WEEKLY REPORT
 #########################
 
@@ -761,6 +839,11 @@ def main() -> None:
         , dt.time(8,0,0,tzinfo=argTime)
         , days=(0, 1, 2, 3, 4)
         , name="info_cheques"
+    )
+    updater.job_queue.run_daily(envio_reporte_CFO
+        , dt.time(18,15,0,tzinfo=argTime)
+        , days=(0, 1, 2, 3, 4)
+        , name="info_CFO"
     )
     updater.job_queue.run_daily(envio_reporte_semanal
         , dt.time(12,0,0,tzinfo=argTime)
