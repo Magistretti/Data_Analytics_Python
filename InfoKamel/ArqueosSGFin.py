@@ -13,8 +13,10 @@ sys.path.insert(0,str(pathlib.Path(__file__).parent.parent))
 
 import pandas as pd
 import dataframe_image as dfi
+from googleapiclient.discovery import build
+from google.oauth2 import service_account
 
-from DatosLogin import login, loginSGFin
+from DatosLogin import login, loginSGFin, googleSheet_InfoKamel
 from Conectores import conectorMSSQL
 
 import logging
@@ -26,9 +28,17 @@ logger = logging.getLogger(__name__)
 
 
 
+####################################################################
+# Get DF function
+####################################################################
+
 def _get_df(conexSGES, conexSGFin):
 
+    ####################################################################
     # Get state of the treasuries in a df from a SQL query
+    ####################################################################
+
+
     df_arqueos = pd.read_sql(
         """
         -- EN ESTA CONSULTA SE REALIZA UN APPEND DE LAS TABLAS [SGFIN_IngresoCaja] Y 
@@ -176,8 +186,13 @@ def _get_df(conexSGES, conexSGFin):
     # Rename the NA in the "UEN" column to "TOTAL"
     df_arqueos.fillna("TOTAL", inplace=True)
 
+    
 
+    ####################################################################
     # Get pending collections of each treasury into a df from a SQL query
+    ####################################################################
+
+
     df_RecPendiente = pd.read_sql(
         """
         -- UNION de las recaudaciones pendientes de los distintos negocios
@@ -254,7 +269,7 @@ def _get_df(conexSGES, conexSGFin):
     )
 
     # Merge df_RecPendiente with df_arqueos
-    df_arqueos = pd.merge(
+    df_arqueosRec = pd.merge(
         df_arqueos,
         df_RecPendiente,
         how="left",
@@ -262,10 +277,115 @@ def _get_df(conexSGES, conexSGFin):
     )
 
     # Replace the NaNs with zeroes
-    df_arqueos.fillna(0, inplace=True)
+    df_arqueosRec.fillna(0, inplace=True)
 
 
-    return df_arqueos
+    return df_arqueosRec
+
+
+
+####################################################################
+# Get dolar stock of each treasury into a DF from a Google Sheet
+####################################################################
+
+def _get_df_GSheet(spreadsheetID, range):
+    """
+    Will read the selected range of a sheet from GoogleSheet and will return
+    a dataframe. NOTE: dates will be imported as formatted strings and should
+    be transformed accordingly.
+    ARGS: \\
+    spreadsheetID: can be obtained from the share link. Example: 
+    https://docs.google.com/spreadsheets/d/<SpreadSheetID>/edit?usp=sharing \\
+    range: range of a sheet to read in A1 notation. Example: "Dólar!A:E"
+    """
+
+    # Scopes will limit what we can do with the sheet
+    SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'] # Read Only
+    SERVICE_ACCOUNT_FILE = \
+        str(pathlib.Path(__file__).parent.parent) + "\\quickstart.json"
+
+    # Credentials and service for the Sheets API
+    creds = service_account.Credentials.from_service_account_file(
+                SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+
+    service = build('sheets', 'v4', credentials=creds, cache_discovery=False)
+
+    # Call the Sheets API
+    sheet = service.spreadsheets()
+
+
+    requestDolar = sheet.values().get(
+        spreadsheetId=spreadsheetID # Spreadsheet ID
+        , range=range
+            # # valueRenderOption default to "FORMATTED_VALUE", it get strings
+        , valueRenderOption="UNFORMATTED_VALUE" # Will get numbers like numbers
+            # # dateTimeRenderOption default to "SERIAL_NUMBER" unless 
+            # # valueRenderOption is "FORMATTED_VALUE"
+        , dateTimeRenderOption="FORMATTED_STRING" # Will get dates as string
+    )
+
+    # Run the request
+    responseDolar = requestDolar.execute()
+
+    # Get the values of the sheet from the Json. This will be a list of lists
+    responseDolar = responseDolar.get("values")
+    
+    # Transform response into a DF, use the first row has header
+    df_stockDolar = pd.DataFrame(
+        responseDolar[1:] # Row values
+        , columns=responseDolar[0] # Headers
+    )
+
+    # Cast string of dates as datetime
+    df_stockDolar["Fecha"] = pd.to_datetime(
+        df_stockDolar["Fecha"]
+        , dayfirst=True # Specify that strings are in the ddmmyyyy format
+    )
+
+    df_stockDolar = df_stockDolar.convert_dtypes()
+    
+    # Get stock of today, today date is normalized to reset time part of date
+    checkStock = df_stockDolar[
+        df_stockDolar["Fecha"] == pd.to_datetime("today").normalize()
+    ]
+
+    # If we have data today, use today data and remove date column
+    if len(checkStock.index) > 0:
+        df_stockDolar = checkStock
+        df_stockDolar = df_stockDolar.drop(columns=["Fecha"])
+
+    # If we dont have data today, get a DF with zeroes
+    elif len(checkStock.index) == 0:
+        df_zeroValues = pd.DataFrame({
+            "UEN": df_stockDolar["UEN"].unique()
+            , "Dólares": 0
+            , "Dólares Pesificados": 0
+            , "Tipo de Cambio": 1
+        })
+        df_stockDolar = df_zeroValues
+        
+
+    # Cast "Tipo de Cambio" column as string to avoid total
+    df_stockDolar = df_stockDolar.astype({"Tipo de Cambio": "string"})
+
+    # Get "TOTAL" row
+    df_stockDolar.loc[df_stockDolar.index[-1]+1] = \
+        df_stockDolar.sum(numeric_only=True)
+
+    ##########################
+    # Dropping "Tipo de Cambio" until someone register the data
+    df_stockDolar = df_stockDolar.drop(columns=["Tipo de Cambio"])
+    ##########################
+
+    # Rename the NA
+    df_stockDolar.fillna({
+        "UEN":"TOTAL"
+        #, "Tipo de Cambio":""
+    }, inplace=True)
+
+
+    
+    return df_stockDolar
 
 
 
@@ -381,7 +501,8 @@ def arqueos():
 
     # Get DF
     df_arqueos = _get_df(conexSGES, conexSGFin)
-
+    df_stockDolar = _get_df_GSheet(googleSheet_InfoKamel, "Dólar!A:E")
+    
     # Styling of DF
     df_arqueos_Estilo = _estiladorVtaTitulo(
         df_arqueos
@@ -395,11 +516,20 @@ def arqueos():
         ], titulo="ARQUEOS"
     )
 
+    df_stockDolar_Estilo = _estiladorVtaTitulo(
+        df_stockDolar
+        ,[
+            "Dólares"
+            , "Dólares Pesificados"
+        ], titulo="Arqueo Dólares"
+    )
+
     # Files location
     ubicacion = str(pathlib.Path(__file__).parent)+"\\"
 
     # Get image of df_arqueos_Estilo
     _df_to_image(df_arqueos_Estilo, ubicacion, "Arqueos.png")
+    _df_to_image(df_stockDolar_Estilo, ubicacion, "ArqueosUSD.png")
 
 
     # Timer
