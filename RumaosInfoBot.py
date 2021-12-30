@@ -668,6 +668,12 @@ def envio_reporte_CFO(context):
 
     context.bot.send_photo(
         chat_id
+        , open(find("ArqueosUSD.png", ubic), "rb")
+        , "ArqueosUSD.png"
+    )
+
+    context.bot.send_photo(
+        chat_id
         , open(find("ChequesSaldos.png", ubic), "rb")
         , "ChequesSaldos.png"
     )
