@@ -41,6 +41,7 @@ from InfoSemanal.InfoVtasProyGranClient import vtaProyGranClient
 from InfoKamel.ArqueosSGFin import arqueos
 from InfoKamel.ChequesSaldosSGFin import chequesSaldos
 from InfoKamel.DeudaComercial import condicionDeudores
+from InfoKamel.BancosSaldos import bancosSaldos
 
 
 #####//////////////######
@@ -615,6 +616,7 @@ def envio_reporte_cheques(context):
 
 # arqueos
 # chequesSaldos
+# bancosSaldos
 # condicionDeudores
 
 
@@ -639,6 +641,15 @@ def envio_reporte_CFO(context):
             , text="Error al resetear Info chequesSaldos"
         )
         logger.error("Error al resetear chequesSaldos", exc_info=1)
+
+    try:
+        bancosSaldos()
+        logger.info("Info BancosSaldos reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info BancosSaldos"
+        )
+        logger.error("Error al resetear BancosSaldos", exc_info=1)
 
     try:
         condicionDeudores()
@@ -675,6 +686,12 @@ def envio_reporte_CFO(context):
     context.bot.send_photo(
         chat_id
         , open(find("ChequesSaldos.png", ubic), "rb")
+        , "ChequesSaldos.png"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(find("BancosSaldos.png", ubic), "rb")
         , "ChequesSaldos.png"
     )
 
