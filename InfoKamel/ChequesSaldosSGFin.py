@@ -169,7 +169,7 @@ def _get_df_GSheet(spreadsheetID, range):
     sheet = service.spreadsheets()
 
 
-    requestEcheq = sheet.values().get(
+    request = sheet.values().get(
         spreadsheetId=spreadsheetID # Spreadsheet ID
         , range=range
             # # valueRenderOption default to "FORMATTED_VALUE", it get strings
@@ -180,49 +180,49 @@ def _get_df_GSheet(spreadsheetID, range):
     )
 
     # Run the request
-    responseEcheq = requestEcheq.execute()
+    response = request.execute()
 
     # Get the values of the sheet from the Json. This will be a list of lists
-    responseEcheq = responseEcheq.get("values")
+    response = response.get("values")
     
     # Transform response into a DF, use the first row has header
-    df_stockEcheq = pd.DataFrame(
-        responseEcheq[1:] # Row values
-        , columns=responseEcheq[0] # Headers
+    df_gSheetData = pd.DataFrame(
+        response[1:] # Row values
+        , columns=response[0] # Headers
     )
 
     # Cast string of dates as datetime
-    df_stockEcheq["Fecha"] = pd.to_datetime(
-        df_stockEcheq["Fecha"]
+    df_gSheetData["Fecha"] = pd.to_datetime(
+        df_gSheetData["Fecha"]
         , dayfirst=True # Specify that strings are in the ddmmyyyy format
     )
 
-    df_stockEcheq = df_stockEcheq.convert_dtypes()
+    df_gSheetData = df_gSheetData.convert_dtypes()
     
     # Get stock of today, today date is normalized to reset time part of date
-    checkStock = df_stockEcheq[
-        df_stockEcheq["Fecha"] == pd.to_datetime("today").normalize()
+    df_checkData = df_gSheetData[
+        df_gSheetData["Fecha"] == pd.to_datetime("today").normalize()
     ].copy() # .copy() will avoid raising "SettingWithCopyWarning"
 
     # Fill NaN with zero in case of missing data
-    checkStock.fillna({"Saldo Final": 0}, inplace=True)
+    df_checkData.fillna({"Saldo Final": 0}, inplace=True)
 
     # If we have data today, use today data and remove date column
-    if len(checkStock.index) > 0:
-        df_stockEcheq = checkStock
-        df_stockEcheq = df_stockEcheq.drop(columns=["Fecha"])
+    if len(df_checkData.index) > 0:
+        df_gSheetData = df_checkData
+        df_gSheetData = df_gSheetData.drop(columns=["Fecha"])
 
     # If we dont have data today, get a DF with zeroes
-    elif len(checkStock.index) == 0:
+    elif len(df_checkData.index) == 0:
         df_zeroValues = pd.DataFrame({
             "UEN": "ECheq"
             , "Saldo Final": 0
         })
-        df_stockEcheq = df_zeroValues
+        df_gSheetData = df_zeroValues
         
 
 
-    return df_stockEcheq
+    return df_gSheetData
 
 
 ##########################################
