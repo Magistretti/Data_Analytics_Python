@@ -314,7 +314,7 @@ def _get_df_GSheet(spreadsheetID, range):
     sheet = service.spreadsheets()
 
 
-    requestDolar = sheet.values().get(
+    request = sheet.values().get(
         spreadsheetId=spreadsheetID # Spreadsheet ID
         , range=range
             # # valueRenderOption default to "FORMATTED_VALUE", it get strings
@@ -325,67 +325,77 @@ def _get_df_GSheet(spreadsheetID, range):
     )
 
     # Run the request
-    responseDolar = requestDolar.execute()
+    response = request.execute()
 
     # Get the values of the sheet from the Json. This will be a list of lists
-    responseDolar = responseDolar.get("values")
-    
+    response = response.get("values")
+    print(response)
     # Transform response into a DF, use the first row has header
-    df_stockDolar = pd.DataFrame(
-        responseDolar[1:] # Row values
-        , columns=responseDolar[0] # Headers
+    df_gSheetData = pd.DataFrame(
+        response[1:] # Row values
+        , columns=response[0] # Headers
     )
 
     # Cast string of dates as datetime
-    df_stockDolar["Fecha"] = pd.to_datetime(
-        df_stockDolar["Fecha"]
+    df_gSheetData["Fecha"] = pd.to_datetime(
+        df_gSheetData["Fecha"]
         , dayfirst=True # Specify that strings are in the ddmmyyyy format
     )
 
-    df_stockDolar = df_stockDolar.convert_dtypes()
-    
+    df_gSheetData = df_gSheetData.convert_dtypes()
+
     # Get stock of today, today date is normalized to reset time part of date
-    checkStock = df_stockDolar[
-        df_stockDolar["Fecha"] == pd.to_datetime("today").normalize()
-    ]
+    df_checkData = df_gSheetData[
+        df_gSheetData["Fecha"] == pd.to_datetime("today").normalize()
+    ].copy() # .copy() will avoid raising "SettingWithCopyWarning"
+
+    # In case of empty values (""), replace them with zero
+    df_checkData.replace({"": 0}, inplace=True)
+    
+    # Fill NaN with zero in case of missing data
+    df_checkData.fillna({
+        "Dólares": 0
+        , "Dólares Pesificados": 0
+        , "Tipo de Cambio": 1
+    }, inplace=True)
 
     # If we have data today, use today data and remove date column
-    if len(checkStock.index) > 0:
-        df_stockDolar = checkStock
-        df_stockDolar = df_stockDolar.drop(columns=["Fecha"])
+    if len(df_checkData.index) > 0:
+        df_gSheetData = df_checkData
+        df_gSheetData = df_gSheetData.drop(columns=["Fecha"])
 
     # If we dont have data today, get a DF with zeroes
-    elif len(checkStock.index) == 0:
+    elif len(df_checkData.index) == 0:
         df_zeroValues = pd.DataFrame({
-            "UEN": df_stockDolar["UEN"].unique()
+            "UEN": df_gSheetData["UEN"].unique()
             , "Dólares": 0
             , "Dólares Pesificados": 0
             , "Tipo de Cambio": 1
         })
-        df_stockDolar = df_zeroValues
+        df_gSheetData = df_zeroValues
         
 
     # Cast "Tipo de Cambio" column as string to avoid total
-    df_stockDolar = df_stockDolar.astype({"Tipo de Cambio": "string"})
+    df_gSheetData = df_gSheetData.astype({"Tipo de Cambio": "string"})
 
     # Get "TOTAL" row
-    df_stockDolar.loc[df_stockDolar.index[-1]+1] = \
-        df_stockDolar.sum(numeric_only=True)
+    df_gSheetData.loc[df_gSheetData.index[-1]+1] = \
+        df_gSheetData.sum(numeric_only=True)
 
     ##########################
     # Dropping "Tipo de Cambio" until someone register the data
-    df_stockDolar = df_stockDolar.drop(columns=["Tipo de Cambio"])
+    df_gSheetData = df_gSheetData.drop(columns=["Tipo de Cambio"])
     ##########################
 
     # Rename the NA
-    df_stockDolar.fillna({
+    df_gSheetData.fillna({
         "UEN":"TOTAL"
         #, "Tipo de Cambio":""
     }, inplace=True)
 
 
     
-    return df_stockDolar
+    return df_gSheetData
 
 
 
