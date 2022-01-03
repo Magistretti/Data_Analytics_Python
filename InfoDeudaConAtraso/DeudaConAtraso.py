@@ -272,7 +272,7 @@ def deudoresConAtraso():
     # Transform DF to get a list of clients in Excel
     #############################
 
-    nombreExcel = "ClientesConMora.xlsx"
+    nombreExcel = "ClientesConAtraso.xlsx"
 
 
     df_ctas_Para_Excel = df_cuentasDeudoras[
@@ -304,12 +304,12 @@ def deudoresConAtraso():
 
     df_ctas_Para_Excel_Estilo.to_excel(
         writer
-        , sheet_name="ClientesConMora"
+        , sheet_name="ClientesConAtraso"
         , header=True
         , index=False
     )
 
-    worksheet = writer.sheets["ClientesConMora"]
+    worksheet = writer.sheets["ClientesConAtraso"]
 
     # Auto adjust cell lenght
     for column in df_ctas_Para_Excel:
