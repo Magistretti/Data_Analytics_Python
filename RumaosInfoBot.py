@@ -43,6 +43,8 @@ from InfoKamel.ChequesSaldosSGFin import chequesSaldos
 from InfoKamel.DeudaComercial import condicionDeudores
 from InfoKamel.BancosSaldos import bancosSaldos
 
+from InfoDeudaConAtraso.DeudaConAtraso import deudoresConAtraso
+
 
 #####//////////////######
 # BOT Token selection for testing:
@@ -56,7 +58,7 @@ if MODE == 1:
     print("\n//////////","USANDO TEST BOT","//////////\n")
 else:
     token = bot_token
-    destinatarios = [rumaos_info, rumaos_info_com]
+    destinatarios = [rumaos_info]
 ######//////////////######
 
 
@@ -453,13 +455,13 @@ def envio_automatico(context):
     logger.info("\n->Comenzando generación de informes<-")
 
     try:
-        run_path(filePath_Info_Morosos+"Morosos.py")
-        logger.info("Info Morosos reseteado")
+        deudoresConAtraso()
+        logger.info("Info deudoresConAtraso reseteado")
     except Exception as e:
         context.bot.send_message(id_Autorizados[0]
-            , text="Error al resetear Info Morosos"
+            , text="Error al resetear Info deudoresConAtraso"
         )
-        logger.error("Error al resetear Info Morosos", exc_info=1)
+        logger.error("Error al resetear Info deudoresConAtraso", exc_info=1)
 
     try:
         run_path(filePath_InfoVtaComb+"TotalesPorCombustible.py")
@@ -510,42 +512,74 @@ def envio_automatico(context):
 
     for ids in destinatarios:
 
-        context.bot.send_message(ids, text="INFORMES AUTOMÁTICOS " + fechahoy)
+        context.bot.send_message(
+            ids
+            , text="INFORMES AUTOMÁTICOS "
+            + fechahoy
+            + "\n Datos relevados hasta ayer"
+        )
 
-        if ids in [rumaos_info, testrumaos]:
+        context.bot.send_photo(
+            ids
+            , open(filePath_InfoVtaComb+"Info_VolumenVentas.png", "rb")
+            , "Venta Total por Combustible de Ayer"
+        )
 
-            context.bot.send_photo(
-                ids
-                , open(filePath_InfoVtaComb+"Info_VolumenVentas.png", "rb")
-                , "Venta Total por Combustible de Ayer"
-            )
-            context.bot.send_photo(
+        context.bot.send_photo(
             ids
             , open(find("Info_PenetracionRedMas.png", ubic), "rb")
             , "Penetración RedMas"
-            )
-            context.bot.send_photo(
-                ids
-                , open(find("Info_VentaLubri.png", ubic), "rb")
-                , "Venta Lubricantes"
-            )
+        )
+
+        context.bot.send_photo(
+            ids
+            , open(find("Info_VentaLubri.png", ubic), "rb")
+            , "Venta Lubricantes"
+        )
 
         context.bot.send_photo(
             ids
             , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudores.png", "rb")
             , "Grandes Deudas"
         )
+
         context.bot.send_photo(
             ids
             , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudasPorVend.png"
                 , "rb")
             , "Grandes Deudas por Vendedor"
         )
+
         context.bot.send_photo(
             ids
-            , open(filePath_Info_Morosos+"Info_Morosos.png", "rb")
-            , "Morosos"
+            , open(find("DeudasConAtraso.png", ubic), "rb")
+            , "Deudas con Atraso"
         )
+
+        context.bot.send_photo(
+            ids
+            , open(find("DeudaExcedida.png", ubic), "rb")
+            , "Deudas Excedidas"
+        )
+
+        context.bot.send_photo(
+            ids
+            , open(find("DeudaMorosa.png", ubic), "rb")
+            , "Deudas Morosas"
+        )
+        
+        context.bot.send_photo(
+            ids
+            , open(find("DeudaPrejudicial.png", ubic), "rb")
+            , "Deudas Prejudiciales"
+        )
+
+        context.bot.send_document(
+            ids
+            , open(find("ClientesConAtraso.xlsx", ubic), "rb")
+            , "ClientesConAtraso.xlsx"
+        )
+
         context.bot.send_photo(
             ids
             , open(filePath_Info_Despachos_Camioneros+
@@ -553,6 +587,78 @@ def envio_automatico(context):
             , "Despachos Camioneros"
         )
 
+
+
+#########################
+# DAILY REPORT Comercial
+#########################
+
+def envio_reporte_comercial(context):
+
+    logger.info("\n->Comenzando generación de informe comercial<-")
+
+    fechahoy = dt.datetime.now().strftime("%d/%m/%y")
+
+    chat_id = rumaos_info_com
+
+    context.bot.send_message(
+        chat_id
+        , text="INFORMES AUTOMÁTICOS " 
+        + fechahoy 
+        + "\n Datos relevados hasta ayer"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudores.png", "rb")
+        , "Grandes Deudas"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(filePath_InfoGrandesDeudas+"Info_GrandesDeudasPorVend.png"
+            , "rb")
+        , "Grandes Deudas por Vendedor"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(find("DeudasConAtraso.png", ubic), "rb")
+        , "Deudas con Atraso"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(find("DeudaExcedida.png", ubic), "rb")
+        , "Deudas Excedidas"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(find("DeudaMorosa.png", ubic), "rb")
+        , "Deudas Morosas"
+    )
+    
+    context.bot.send_photo(
+        chat_id
+        , open(find("DeudaPrejudicial.png", ubic), "rb")
+        , "Deudas Prejudiciales"
+    )
+
+    context.bot.send_document(
+        chat_id
+        , open(find("ClientesConAtraso.xlsx", ubic), "rb")
+        , "ClientesConAtraso.xlsx"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(filePath_Info_Despachos_Camioneros+
+            "Info_Despachos_Camioneros.png", "rb")
+        , "Despachos Camioneros"
+    )
+    
+    
 
 
 #########################
@@ -571,10 +677,10 @@ def envio_reporte_lapuchesky(context):
     )
 
     context.bot.send_photo(
-            lapuchesky
-            , open(find("Info_PenetracionRedMas.png", ubic), "rb")
-            , "Penetración RedMas"
-            )
+        lapuchesky
+        , open(find("Info_PenetracionRedMas.png", ubic), "rb")
+        , "Penetración RedMas"
+    )
     
     
 
@@ -603,10 +709,10 @@ def envio_reporte_cheques(context):
     )
 
     context.bot.send_document(
-            rumaos_cheques
-            , open(find("Cheques_UENs.xlsx", ubic), "rb")
-            , "Cheques_UENs.xlsx"
-            )
+        rumaos_cheques
+        , open(find("Cheques_UENs.xlsx", ubic), "rb")
+        , "Cheques_UENs.xlsx"
+    )
 
 
 
@@ -853,6 +959,10 @@ def main() -> None:
     updater.job_queue.run_daily(envio_automatico
         , dt.time(11,0,0,tzinfo=argTime) 
         , name="info_diario"
+    )
+    updater.job_queue.run_daily(envio_reporte_comercial
+        , dt.time(11,5,0,tzinfo=argTime) 
+        , name="info_comercial"
     )
     updater.job_queue.run_daily(envio_reporte_lapuchesky
         , dt.time(11,15,0,tzinfo=argTime) 
