@@ -182,6 +182,7 @@ df_despachos["UEN"] = df_despachos["UEN"].str.strip()
 
 
 # Counting all the truckers purchases, of yesterday, that dont have an account
+# but use "RedMas" Card
 df_despachosRedmas = pd.read_sql("""
     SELECT
         D.UEN
@@ -244,6 +245,7 @@ df_despachos_Y_Activ = pd.merge(
 
 # Fill NaNs of merges
 df_despachos_Y_Activ.fillna(value=0, inplace=True)
+
 # Create row of column totals
 df_despachos_Y_Activ.loc["colTOTAL"]= pd.Series(
     df_despachos_Y_Activ.sum()
@@ -251,16 +253,23 @@ df_despachos_Y_Activ.loc["colTOTAL"]= pd.Series(
 )
 # Fill NaN in UEN column at total row
 df_despachos_Y_Activ.fillna({"UEN":"TOTAL"}, inplace=True)
+
 # Fill NaN in "PENETRACIÓN RED MÁS" column at total row with the total quantity 
 # of "DESPACHOS RED MAS" over "DESPACHOS"
 tasa = (df_despachos_Y_Activ.loc["colTOTAL","DESPACHOS RED MAS"] /
     df_despachos_Y_Activ.loc["colTOTAL","DESPACHOS"])
+
 df_despachos_Y_Activ.fillna({"PENETRACIÓN RED MÁS":tasa}, inplace=True)
 
+# Creating column "ACTIVACIONES" with value zero in case it doesn't exist
+if "ACTIVACIONES" not in df_despachos_Y_Activ:
+    df_despachos_Y_Activ["ACTIVACIONES"] = 0
 
-##############
+
+
+##########################################
 # STYLING of the dataframe
-##############
+##########################################
 
 def estiladorVtaTitulo(df,listaColNumericas,titulo):
     """
@@ -330,9 +339,9 @@ except:
     pass
 
 
-##############
+##########################################
 # PRINTING dataframe as an image
-##############
+##########################################
 
 # This will print the df with a unique name and will erase the old image 
 # everytime the script is run
