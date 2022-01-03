@@ -1,15 +1,22 @@
 ###################################
 #
-#     INFORME DEUDORES MOROSOS
-#
+#     INFORME DEUDORES MOROSOS V2
+#           03/01/2021
 ###################################
 
 import os
+import sys
+import pathlib
+
+# Allow imports from the top folder
+sys.path.insert(0,str(pathlib.Path(__file__).parent.parent))
+
 import pandas as pd
-#########
-# Formating display of dataframes with comma separator for numbers
-pd.options.display.float_format = "{:20,.2f}".format 
-#########
+import dataframe_image as dfi
+from openpyxl import load_workbook
+
+from DatosLogin import login
+from Conectores import conectorMSSQL
 
 import logging
 logging.basicConfig(
@@ -18,395 +25,374 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-import dataframe_image as dfi
-
-tiempoInicio = pd.to_datetime("today")
-
-def biggestOf2(a,b):
-    if a > b:
-        return a
-    else:
-        return b
-
-# We are connecting to a Microsoft SQL Server so we can use pyodbc library
-import pyodbc
-
-# "login" is a list that holds the connection data to the SQL Server
-from DatosLogin import login
-
-server = login[0]
-database = login[1]
-username = login[2] 
-password = login[3]
-
-# Try connecting to the SQL Server, will report error and stop if failed
-try:
-    db_conex = pyodbc.connect(
-        "DRIVER={ODBC Driver 17 for SQL Server};\
-        SERVER="+server+";\
-        DATABASE="+database+";\
-        UID="+username+";\
-        PWD="+ password
-    )
-except Exception as e:
-    listaErrores = e.args[1].split(".")
-    logger.error("\nOcurrió un error al conectar a SQL Server: ")
-    for i in listaErrores:
-        logger.error(i)
-    exit()
-
 
 #########
-# Table "Clientes condicion especial.xlsx" NOT NEEDED ANYMORE
-#
-# Convert Excel file "Clientes condicion especial.xlsx" to a Dataframe
-#
-# Requirements:
-# -Filter unused columns
-# -Drop rows with NaNs in "Condición del cliente" column
+# Formating display of dataframes with comma separator for numbers
+pd.options.display.float_format = "{:20,.2f}".format 
 #########
-
-# df_condicionCliente = pd.read_excel("C:/Users/gpedro/OneDrive - RedMercosur/"
-#     "Consultas Power BI/TABLERO SGES VS SGFIN/"
-#     "Clientes condicion especial.xlsx",
-#     usecols="B,I")
-
-# df_condicionCliente["NROCLIPRO"] = \
-#     df_condicionCliente["NROCLIPRO"].astype("string")
-
-# df_condicionCliente.dropna(subset=["Condición del cliente"], inplace=True)
-
-#print(df_condicionCliente)
-
-#########
-# Left Outer Merge of df_cuentasDeudoras with df_condicionCliente to add 
-# "Condición del cliente" column to df_cuentasDeudoras
-#########
-
-# df_cuentasDeudoras = df_cuentasDeudoras.merge(right=df_condicionCliente,
-#     how="left", on="NROCLIPRO")
-# df_cuentasDeudoras.info()
-
-
-#########
-# Convert dbo.Faccli SQL table to a Dataframe
-#
-# At this point we will make a SQL query with the required data of the "Faccli"
-# table merged to the "Vendedores" table and turn that to a dataframe
-# with Pandas.
-# 
-# Requirements:
-# -Filter unused columns
-# -Show name of vendor instead of number
-# -Use "ListaSaldoCC = 1" filter to avoid old or frozen accounts
-# -Use a filter by total debt (SALDOPREPAGO - SALDOREMIPENDFACTU) 
-#   to get only debt below -100
-######### 
-
-df_cuentasDeudoras = pd.read_sql("""
-    SELECT 
-        CAST(FacCli.[NROCLIPRO] AS VARCHAR) as NROCLIENTE
-        ,FacCli.[NOMBRE]
-        ,FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU as SALDOCUENTA
-    FROM [Rumaos].[dbo].[FacCli] WITH (NOLOCK)
-    where ListaSaldoCC = 1
-        and FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU < -100;
-""", db_conex)
-
-df_cuentasDeudoras = df_cuentasDeudoras.convert_dtypes()
-
-#print(df_cuentasDeudoras.info())
-#print(df_cuentasDeudoras.head(5))
 
 
 #########
 # Convert dbo.FacRemDet SQL table to a Dataframe
-#
+# 
 # Requirements:
 # -Filter unused columns
-# -Cast PTOVTA, NROREMITO and NROCLIENTE as string
-# -Get data not older than a year back from today
-#########
+# -Get account numbers above '100000'
+# -Use "ListaSaldoCC = 1" filter to avoid old or frozen accounts
+# -Use a filter by total debt (SALDOPREPAGO - SALDOREMIPENDFACTU) 
+#   to get only debt below -1000
+# -Get data from 2018 to yesterday
+######### 
 
-fechaAñoAtras = (tiempoInicio - pd.Timedelta(365, unit="d"))\
-    .strftime("'%Y%m%d'")
+def _get_df(conexMSSQL):
+    df_cuentasDeudoras = pd.read_sql(
+        """
+            SELECT
+            CAST(FRD.[NROCLIENTE] as VARCHAR) as 'NROCLIENTE'
+            ,RTRIM(Cli.NOMBRE) as 'NOMBRE'
 
-df_remitos = pd.read_sql("""
-    SELECT 
-        FacRemDet.[FECHASQL]
-        ,cast(FacRemDet.[NROCLIENTE] AS VARCHAR) as NROCLIENTE
-        ,FacCli.[NOMBRE]
-        ,FacRemDet.[IMPORTE]
-    FROM [Rumaos].[dbo].[FacRemDet] WITH (NOLOCK)
-    Left Outer Join FacCli WITH (NOLOCK) on FacRemDet.NROCLIENTE = FacCli.NROCLIPRO
-    where FECHASQL >= """+fechaAñoAtras+"""
-        and ListaSaldoCC = 1
-        and FacCli.SALDOPREPAGO - FacCli.SALDOREMIPENDFACTU < -100
-""", db_conex)
+            --,MIN(CAST(FRD.[FECHASQL] as date)) as 'FECHA_1erRemito'
+            --,MAX(CAST(FRD.[FECHASQL] as date)) as 'FECHA_UltRemito'
 
-#print(df_remitos.head(5))
-df_remitos = df_remitos.convert_dtypes()
-#df_remitos.info()
+            ----Días Entre Remitos
+            --,IIF(MIN(CAST(FRD.[FECHASQL] as date)) = MAX(CAST(FRD.[FECHASQL] as date))
+            --	, -1
+            --	, DATEDIFF(DAY,MAX(CAST(FRD.[FECHASQL] as date)),MIN(CAST(FRD.[FECHASQL] as date)))
+            --) as 'Días Entre Remitos'
 
+            --,sum(FRD.[IMPORTE]) as 'ConsumoHistorico'
 
-############
-# -Get the first date, last date and the sum of IMPORTE of each client in 
-#   df_remitos,
-# -Also get the sum of IMPORTE of the last 7 days for each client
-############
+            ----Consumo Diario
+            --,sum(FRD.[IMPORTE])/IIF(MIN(CAST(FRD.[FECHASQL] as date)) = MAX(CAST(FRD.[FECHASQL] as date))
+            --	, -1
+            --	, DATEDIFF(DAY,MAX(CAST(FRD.[FECHASQL] as date)),MIN(CAST(FRD.[FECHASQL] as date)))
+            --) as 'Consumo Diario'
 
-df_primerRemitoPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","FECHASQL"]]\
-    .groupby(["NROCLIENTE","NOMBRE"]).min()
+            ,CAST(ROUND(MIN(Cli.SALDOPREPAGO - Cli.SALDOREMIPENDFACTU),0) as int) as 'SALDOCUENTA'
 
-#print(df_primerRemitoPorCuenta.head())
+            ,CAST(MIN(Cli.SALDOPREPAGO - Cli.SALDOREMIPENDFACTU)
+                /(sum(FRD.[IMPORTE])/IIF(MIN(CAST(FRD.[FECHASQL] as date)) = MAX(CAST(FRD.[FECHASQL] as date))
+                    , -1
+                    , DATEDIFF(DAY,MAX(CAST(FRD.[FECHASQL] as date)),MIN(CAST(FRD.[FECHASQL] as date)))
+                )) as int) as 'Días Venta Adeud'
 
-df_ultimoRemitoPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","FECHASQL"]]\
-    .groupby(["NROCLIENTE","NOMBRE"]).max()
+            , DATEDIFF(DAY, MAX(CAST(FRD.[FECHASQL] as date)), CAST(GETDATE() as date)) as 'Días Desde Última Compra'
 
-#print(df_ultimoRemitoPorCuenta.head())
+            , ISNULL(RTRIM(Vend.NOMBREVEND),'') as 'Vendedor'
 
-df_ventaPesosPorCuenta = df_remitos[["NROCLIENTE","NOMBRE","IMPORTE"]]\
-    .groupby(["NROCLIENTE","NOMBRE"]).sum()
+            FROM [Rumaos].[dbo].[FacRemDet] as FRD with (NOLOCK)
+            INNER JOIN dbo.FacCli as Cli with (NOLOCK)
+                ON FRD.NROCLIENTE = Cli.NROCLIPRO
+            LEFT OUTER JOIN dbo.Vendedores as Vend with (NOLOCK)
+	            ON Cli.NROVEND = Vend.NROVEND
 
-#print(df_ventaPesosPorCuenta.head())
+            where FRD.NROCLIENTE > '100000'
+                AND (Cli.SALDOPREPAGO - Cli.SALDOREMIPENDFACTU) < -1000
+                and Cli.ListaSaldoCC = 1
+                and FECHASQL >= '20210101' and FECHASQL <= CAST(GETDATE() as date)
 
-fechaHoy = pd.to_datetime("today").normalize()
-
-fechaSemanaAtras = fechaHoy - pd.to_timedelta(7, unit="days")
-
-df_remitos7Dias = df_remitos[(df_remitos["FECHASQL"] >= 
-    fechaSemanaAtras) & (df_remitos["FECHASQL"] < fechaHoy)]
-
-#print(df_remitos7Dias.head())
-
-df_VentaSemanalPorCuenta = df_remitos7Dias[["NROCLIENTE","NOMBRE","IMPORTE"]]\
-    .groupby(["NROCLIENTE","NOMBRE"]).sum()
-
-#print(df_VentaSemanalPorCuenta.head())
-
-
-############
-# Merging df_primerRemitoPorCuenta, df_ultimoRemitoPorCuenta, 
-# df_ventaPesosPorCuenta and df_VentaSemanalPorCuenta into a new
-# dataframe, df_remitosVentasPorCliente
-############
-
-df_remitosVentasPorCliente = pd.merge(
-    df_primerRemitoPorCuenta,
-    df_ultimoRemitoPorCuenta,
-    on=["NROCLIENTE","NOMBRE"],
-    suffixes=("_PrimerRemito","_UltimoRemito")
-)
-
-df_remitosVentasPorCliente = pd.merge(
-    df_remitosVentasPorCliente,
-    df_ventaPesosPorCuenta,
-    on=["NROCLIENTE","NOMBRE"]
-)
-
-df_remitosVentasPorCliente = pd.merge(
-    df_remitosVentasPorCliente,
-    df_VentaSemanalPorCuenta,
-    on=["NROCLIENTE","NOMBRE"],
-    suffixes=("","_Semanal")
-)
-
-#######
-# Creating columns: 
-#   -"Dias Entre 1er y Ultimo Remito" 
-#   -"Venta $ Prom Diaria"
-#   -"Venta $ Prom Ult 7 Dias" 
-# in df_remitosVentasPorCliente
-#######
-
-df_remitosVentasPorCliente["Dias Entre 1er y Ultimo Remito"] = \
-    df_remitosVentasPorCliente.apply(
-        lambda row: (row["FECHASQL_UltimoRemito"]-row["FECHASQL_PrimerRemito"])
-            if (row["FECHASQL_UltimoRemito"]-row["FECHASQL_PrimerRemito"]) >
-                pd.to_timedelta(0, unit="days") #Compare timedelta > 0
-            else pd.to_timedelta(1, unit="days") #To avoid divide by 0
-        , axis= 1 #This will apply the lambda function per row
-    ).dt.days
-
-df_remitosVentasPorCliente["Venta $ Prom Diaria"] = \
-    df_remitosVentasPorCliente.apply(
-        lambda row: row["IMPORTE"] / row["Dias Entre 1er y Ultimo Remito"]
-        , axis= 1
+            group by FRD.NROCLIENTE, Cli.NOMBRE, Vend.NOMBREVEND
+            order by MIN(Cli.SALDOPREPAGO - Cli.SALDOREMIPENDFACTU)
+        """, conexMSSQL
     )
 
-df_remitosVentasPorCliente["Venta $ Prom Ult 7 Dias"] = \
-    df_remitosVentasPorCliente.apply(
-        lambda row: row["IMPORTE_Semanal"] / 7
-        , axis= 1
-    )
+    df_cuentasDeudoras = df_cuentasDeudoras.convert_dtypes()
+    
+    return df_cuentasDeudoras
 
-#print(df_remitosVentasPorCliente.head())
+#print(df_cuentasDeudoras.head(20))
 
 
-#############
-# -Merge df_remitosVentasPorCliente with df_cuentasDeudoras to get 
-# the "SALDOCUENTA" column
-# -Create column "Dias Venta Adeud" = SALDOCUENTA/"Mayor Vta $ Prom Diaria"
-# -"Mayor Vta $ Prom Diaria" is the biggest of "Venta $ Prom Diaria" and
-#   "Venta $ Prom Ult 7 Dias"
-# -Create column "Cond Deuda Cliente" = IF("Dias Venta Adeud" < 20, "Normal",
-#   IF("Dias Venta Adeud" < 30, "Moroso","Excedido"))
-#############
 
-df_remitosVentasPorCliente = pd.merge(
-    df_remitosVentasPorCliente,
-    df_cuentasDeudoras[["NROCLIENTE","NOMBRE","SALDOCUENTA"]],
-    on=["NROCLIENTE","NOMBRE"]
-)
+#######################################
+# -Create column "Cond Deuda Cliente"
+#######################################
 
-df_remitosVentasPorCliente["Dias Venta Adeud"] = \
-    df_remitosVentasPorCliente.apply(
-        lambda row: round(row["SALDOCUENTA"] * (-1) / 
-            biggestOf2(
-                row["Venta $ Prom Diaria"],
-                row["Venta $ Prom Ult 7 Dias"]
-            )
-        )
-        , axis= 1
-    )
-
-def condDeuda(diasAdeudados):
-    if diasAdeudados < 20:
-        return "Normal"
-    elif diasAdeudados < 30:
-        return "Moroso"
+def _categorias(dias):
+    """
+    This function manage the category assigned according to quantity of days
+    """
+    if dias < 20:
+        return "1-Normal"
+    elif dias < 40:
+        return "2-Excedido"
+    elif dias < 60:
+        return "3-Moroso"
     else:
-        return "Excedido"
+        return "4-PREJUDICIAL"
 
-df_remitosVentasPorCliente["Cond Deuda Cliente"] = \
-    df_remitosVentasPorCliente.apply(
-        lambda row: condDeuda(row["Dias Venta Adeud"])
-        , axis= 1
-    )
-
-df_condicionCuentas = df_remitosVentasPorCliente[
-    ["NOMBRE","SALDOCUENTA","Dias Venta Adeud","Cond Deuda Cliente"]
-]
-
-df_condicionCuentasRetrasadas = \
-    df_condicionCuentas[df_condicionCuentas["Cond Deuda Cliente"] != "Normal"]
-
-df_condicionCuentasRetrasadas = \
-df_condicionCuentasRetrasadas.sort_values(by=["SALDOCUENTA"])
-
-#print(df_condicionCuentasRetrasadas)
+def _condDeuda(diasAdeudados, diasUltCompra):
+    """
+    This function apply the logic between "Días Venta Adeud" and
+    "Días Desde Última Compra" to choose which is going to be use to
+    determine the category of debtor
+    """
+    if diasUltCompra < 20:
+        return _categorias(diasAdeudados)
+    elif diasUltCompra >= diasAdeudados:
+        return _categorias(diasUltCompra)
+    else:
+        return _categorias(diasAdeudados)
 
 
-##############
-# Creating Total Row for "SALDOCUENTA" column
-##############
 
-# Will cast "Dias Venta Adeud" as a string to avoid trailing zeroes and sum
-df_condicionCuentasRetrasadas= \
-    df_condicionCuentasRetrasadas.astype({"Dias Venta Adeud": "string"})
-
-df_condicionCuentasRetrasadas.loc["colTOTAL"]= \
-    pd.Series(df_condicionCuentasRetrasadas["SALDOCUENTA"].sum()
-        , index= ["SALDOCUENTA"]
-    )
-
-df_condicionCuentasRetrasadas= \
-    df_condicionCuentasRetrasadas.fillna({"NOMBRE":"TOTAL"}).fillna("")
-
-#print(df_condicionCuentasRetrasadas)
-
-
-##############
+##########################################
 # STYLING of the dataframe
-##############
+##########################################
 
-# The next function will format cells with the value "Excedido" to 
-# have a red background
+def _fondoColor(dataframe):
+    return ["background-color: green" if valor == "1-Normal" 
+        else "background-color: yellow" if valor == "2-Excedido"
+        else "background-color: orange" if valor == "3-Moroso"
+        else "background-color: red" if valor == "4-PREJUDICIAL" 
+        else "background-color: black" for valor in dataframe]
 
-def excedidoFondoRojo(dataframe):
-    return ["background-color: red" if valor == "Excedido" 
-        else "background-color: default" for valor in dataframe]
 
-df_conEstilo_condCtaRetrasadas = \
-    df_condicionCuentasRetrasadas.style \
-        .format({"SALDOCUENTA": "${0:,.0f}"}) \
+def _estiladorVtaTitulo(
+    df:pd.DataFrame
+    , list_Col_Num=[]
+    , list_Col_Perc=[]
+    , titulo=""
+):
+    """
+This function will return a styled dataframe that must be assign to a variable.
+ARGS:
+    df: Dataframe that will be styled.
+    list_Col_Num: List of numeric columns that will be formatted with
+    zero decimals and thousand separator.
+    list_Col_Perc: List of numeric columns that will be formatted 
+    as percentage.
+    titulo: String for the table caption.
+    """
+    resultado = df.style \
+        .format("{0:,.0f}", subset=list_Col_Num) \
+        .format("{:,.2%}", subset=list_Col_Perc) \
         .hide_index() \
-        .set_caption("DEUDORES MOROSOS Y EXCEDIDOS"
-            +" "
-            +tiempoInicio.strftime("%d/%m/%y")
+        .set_caption(
+            titulo
+            + "<br>"
+            + (pd.to_datetime("today")
+            .strftime("%d/%m/%y"))
         ) \
-        .set_properties(subset=["Dias Venta Adeud", "Cond Deuda Cliente"]
-            , **{"text-align": "center"}) \
+        .set_properties(subset=list_Col_Num + list_Col_Perc
+            , **{"text-align": "center", "width": "80px"}) \
         .set_properties(border= "2px solid black") \
         .set_table_styles([
-            {"selector": "caption",
+            {"selector": "caption", 
                 "props": [
                     ("font-size", "20px")
                     ,("text-align", "center")
                 ]
             }
-            , {"selector": "th",
+            , {"selector": "th", 
                 "props": [
                     ("text-align", "center")
                     ,("background-color","black")
                     ,("color","white")
+                    ,("font-size", "14px")
                 ]
             }
         ]) \
-        .apply(excedidoFondoRojo,subset=["Cond Deuda Cliente"]) \
-        .apply(lambda x: ["background: black" if x.name == "colTOTAL" 
+        .apply(lambda x: ["background-color: black" if x.name == df.index[-1] 
             else "" for i in x]
             , axis=1) \
-        .apply(lambda x: ["color: white" if x.name == "colTOTAL" 
+        .apply(lambda x: ["color: white" if x.name == df.index[-1]
+            else "" for i in x]
+            , axis=1) \
+        .apply(lambda x: ["font-size: 15px" if x.name == df.index[-1]
             else "" for i in x]
             , axis=1)
 
+    return resultado
 
-##############
-# NOTE: to show the dataframe with the style in Jupyter Notebook you need to 
-# use display() method even when it seem to not be available. If you use 
-# print() it will return an error because is an styler object.
-# Also display() will return an error in the Terminal window.
-##############
 
-try:
-    display(df_conEstilo_condCtaRetrasadas) # type: ignore
-except:
-    print("")
 
-##############
+##########################################
 # PRINTING dataframe as an image
-##############
-
-ubicacion = "C:\Informes\InfoMorosos\\"
-
-# This will print the df with name and time so you can have multiple
-# files in the same folder
-
-# dfi.export(df_conEstilo_condCtaRetrasadas,
-#     ubicacion
-#     +"Info_Morosos"
-#     + pd.to_datetime("today").strftime("%Y-%m-%d_%H%M%S")
-#     + ".png"
-# )
-
+##########################################
 
 # This will print the df with a unique name and will erase the old image 
 # everytime the script is run
 
-if os.path.exists(ubicacion+"Info_Morosos.png"):
-    os.remove(ubicacion+"Info_Morosos.png")
-    dfi.export(df_conEstilo_condCtaRetrasadas, 
-        ubicacion+"Info_Morosos.png")
-else:
-    dfi.export(df_conEstilo_condCtaRetrasadas, 
-        ubicacion+"Info_Morosos.png")
+def _df_to_image(df, ubicacion, nombre):
+    """
+    Esta función usa las biblioteca "dataframe_Image as dfi" y "os" para 
+    generar un archivo .png de un dataframe. Si el archivo ya existe, este será
+    reemplazado por el nuevo archivo.
+
+    Args:
+        df: dataframe a convertir
+        ubicacion: ubicacion local donde se quiere grabar el archivo
+         nombre: nombre del archivo incluyendo extensión .png (ej: "hello.png")
+
+    """
+        
+    if os.path.exists(ubicacion+nombre):
+        os.remove(ubicacion+nombre)
+        dfi.export(df, ubicacion+nombre)
+    else:
+        dfi.export(df, ubicacion+nombre)
 
 
-# Timer
-tiempoFinal = pd.to_datetime("today")
-logger.info(
-    "\nInfo Morosos"
-    + "\nTiempo de Ejecucion Total: "
-    + str(tiempoFinal-tiempoInicio)
-)
+
+##########################################
+# FUNCTION TO RUN MODULE
+##########################################
+
+def condicionDeudores():
+    """
+    Create an image of the debtors grouped by state of debt and an Excel file
+    with each debtor and debt
+    """
+
+    # Timer
+    tiempoInicio = pd.to_datetime("today")
+
+    # Files location
+    ubicacion = str(pathlib.Path(__file__).parent)+"\\"
+
+    # Get Connection to database
+    conexMSSQL = conectorMSSQL(login)
+
+    # Get DFs
+    df_cuentasDeudoras = _get_df(conexMSSQL)
+
+    # Clean and transform DFs
+    df_cuentasDeudoras["Cond Deuda Cliente"] = \
+    df_cuentasDeudoras.apply(
+        lambda row: _condDeuda(
+            row["Días Venta Adeud"]
+            , row["Días Desde Última Compra"]
+        ), axis= 1
+    )
+
+
+    #############################
+    # Transform DF to get a list of clients in Excel
+    #############################
+
+    nombreExcel = "ClientesDeudores.xlsx"
+
+
+    df_ctas_Para_Excel = df_cuentasDeudoras
+
+    # Will cast both "Días" columns as a string to be able to fill with ""
+    df_ctas_Para_Excel= df_ctas_Para_Excel\
+        .astype({"Días Venta Adeud": "string"})
+    df_ctas_Para_Excel= df_ctas_Para_Excel\
+        .astype({"Días Desde Última Compra": "string"})
+
+    # Add TOTAL row
+    df_ctas_Para_Excel.loc[df_ctas_Para_Excel.index[-1]+1]= \
+        pd.Series(df_ctas_Para_Excel["SALDOCUENTA"].sum()
+            , index= ["SALDOCUENTA"]
+        )
+
+    df_ctas_Para_Excel = df_ctas_Para_Excel.fillna({"NOMBRE":"TOTAL"}).fillna("")
+
+    df_ctas_Para_Excel_Estilo = _estiladorVtaTitulo(
+        df_ctas_Para_Excel,["SALDOCUENTA"]
+    ).apply(_fondoColor, subset=["Cond Deuda Cliente"])
+
+    # Print list of clients to Excel file
+    writer = pd.ExcelWriter(ubicacion + nombreExcel
+        , engine="xlsxwriter"
+    )
+
+    df_ctas_Para_Excel_Estilo.to_excel(
+        writer
+        , sheet_name="ClientesDeudores"
+        , header=True
+        , index=False
+    )
+
+    worksheet = writer.sheets["ClientesDeudores"]
+
+    # Auto adjust cell lenght
+    for column in df_ctas_Para_Excel:
+        column_length = max(
+            df_ctas_Para_Excel[column].astype(str).map(len).max()
+            , len(column)
+        )
+        col_idx = df_ctas_Para_Excel.columns.get_loc(column)
+        worksheet.set_column(
+            col_idx
+            , col_idx
+            , column_length + 1
+        )
+
+    writer.save()
+
+    # Improve format of "SALDOCUENTA" column in Excel
+    wBook = load_workbook(ubicacion + nombreExcel)
+    wSheet = wBook.active
+    col = wSheet["C"] # Column "SALDOCUENTA"
+    for cell in col:
+        # Will add thousand separator, negatives in red and "$" symbol
+        cell.number_format='"$"\ #,##0;[Red]\-"$"\ #,##0'
+    wBook.save(ubicacion + nombreExcel)
+    wBook.close()
+
+
+
+    ##########################################
+    # Grouped by "Cond Deuda Cliente" version
+    ##########################################
+
+    df_saldosCondicion = df_cuentasDeudoras[["Cond Deuda Cliente","SALDOCUENTA"]]
+    df_saldosCondicion = df_saldosCondicion.groupby(["Cond Deuda Cliente"]).sum()
+    df_saldosCondicion.reset_index(inplace=True)
+
+    # Creating row "TOTAL"
+    df_saldosCondicion.loc[df_saldosCondicion.index[-1]+1]= \
+        pd.Series(
+            df_saldosCondicion["SALDOCUENTA"].sum()
+            , index= ["SALDOCUENTA"]
+        )
+    # Fill the NaN in column "Cond Deuda Cliente"
+    df_saldosCondicion.fillna("TOTAL", inplace=True)
+
+    df_saldosCondicion["Participación"] = (
+        df_saldosCondicion[["SALDOCUENTA"]]
+        / df_saldosCondicion[["SALDOCUENTA"]].sum()
+        * 2 # Added "TOTAL" value requires multiply by 2 to get correct percentages
+    )
+
+    df_saldosCondicion.rename(columns={
+        "Cond Deuda Cliente": "Condición"
+        , "SALDOCUENTA": "Saldos"
+    }, inplace=True)
+
+
+    df_saldosCondicion_Estilo = _estiladorVtaTitulo(
+        df_saldosCondicion
+        ,list_Col_Num=["Saldos"]
+        ,list_Col_Perc=["Participación"]
+        ,titulo="CLIENTES DEUDORES"
+    ).apply(_fondoColor, subset=["Condición"])
+
+    #display(df_saldosCondicion_Estilo)
+
+    # Get image from df_saldosCondicion_Estilo
+    _df_to_image(
+        df_saldosCondicion_Estilo
+        ,ubicacion
+        ,"DeudaComercial.png"
+    )
+
+
+
+        
+    # Timer
+    tiempoFinal = pd.to_datetime("today")
+    logger.info(
+        "Info Condición Deudores"
+        + "\nTiempo de Ejecucion Total: "
+        + str(tiempoFinal-tiempoInicio)
+    )
+
+
+
+
+if __name__ == "__main__":
+    condicionDeudores()
