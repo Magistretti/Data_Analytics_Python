@@ -41,7 +41,7 @@ pd.options.display.float_format = "{:20,.2f}".format
 # -Use "ListaSaldoCC = 1" filter to avoid old or frozen accounts
 # -Use a filter by total debt (SALDOPREPAGO - SALDOREMIPENDFACTU) 
 #   to get only debt below -1000
-# -Get data from 2018 to yesterday
+# -Get data from 2021 to today
 ######### 
 
 def _get_df(conexMSSQL):
