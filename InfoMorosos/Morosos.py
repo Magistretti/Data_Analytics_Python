@@ -41,7 +41,7 @@ pd.options.display.float_format = "{:20,.2f}".format
 # -Use "ListaSaldoCC = 1" filter to avoid old or frozen accounts
 # -Use a filter by total debt (SALDOPREPAGO - SALDOREMIPENDFACTU) 
 #   to get only debt below -1000
-# -Get data from 2018 to yesterday
+# -Get data from 2021 to yesterday
 ######### 
 
 def _get_df(conexMSSQL):
@@ -89,7 +89,7 @@ def _get_df(conexMSSQL):
             where FRD.NROCLIENTE > '100000'
                 AND (Cli.SALDOPREPAGO - Cli.SALDOREMIPENDFACTU) < -1000
                 and Cli.ListaSaldoCC = 1
-                and FECHASQL >= '20210101' and FECHASQL <= CAST(GETDATE() as date)
+                and FECHASQL >= '20210101' and FECHASQL <= CAST(GETDATE()-1 as date)
 
             group by FRD.NROCLIENTE, Cli.NOMBRE, Vend.NOMBREVEND
             order by MIN(Cli.SALDOPREPAGO - Cli.SALDOREMIPENDFACTU)
@@ -170,9 +170,9 @@ ARGS:
         .hide_index() \
         .set_caption(
             titulo
-            + "<br>"
-            + (pd.to_datetime("today")
-            .strftime("%d/%m/%y"))
+            + " "
+            + (pd.to_datetime("today")-pd.to_timedelta(1,"days"))
+            .strftime("%d/%m/%y")
         ) \
         .set_properties(subset=list_Col_Num + list_Col_Perc
             , **{"text-align": "center", "width": "80px"}) \
@@ -235,11 +235,12 @@ def _df_to_image(df, ubicacion, nombre):
 
 
 
+
 ##########################################
 # FUNCTION TO RUN MODULE
 ##########################################
 
-def condicionDeudores():
+def deudoresConAtraso():
     """
     Create an image of the debtors grouped by state of debt and an Excel file
     with each debtor and debt
@@ -271,10 +272,12 @@ def condicionDeudores():
     # Transform DF to get a list of clients in Excel
     #############################
 
-    nombreExcel = "ClientesDeudores.xlsx"
+    nombreExcel = "ClientesConMora.xlsx"
 
 
-    df_ctas_Para_Excel = df_cuentasDeudoras
+    df_ctas_Para_Excel = df_cuentasDeudoras[
+        df_cuentasDeudoras["Cond Deuda Cliente"] != "1-Normal"
+    ].copy() # Avoid warning of view vs copy
 
     # Will cast both "Días" columns as a string to be able to fill with ""
     df_ctas_Para_Excel= df_ctas_Para_Excel\
@@ -301,12 +304,12 @@ def condicionDeudores():
 
     df_ctas_Para_Excel_Estilo.to_excel(
         writer
-        , sheet_name="ClientesDeudores"
+        , sheet_name="ClientesConMora"
         , header=True
         , index=False
     )
 
-    worksheet = writer.sheets["ClientesDeudores"]
+    worksheet = writer.sheets["ClientesConMora"]
 
     # Auto adjust cell lenght
     for column in df_ctas_Para_Excel:
@@ -336,57 +339,183 @@ def condicionDeudores():
 
 
     ##########################################
-    # Grouped by "Cond Deuda Cliente" version
+    # List of debtors with filter 2-Excedido
     ##########################################
 
-    df_saldosCondicion = df_cuentasDeudoras[["Cond Deuda Cliente","SALDOCUENTA"]]
-    df_saldosCondicion = df_saldosCondicion.groupby(["Cond Deuda Cliente"]).sum()
-    df_saldosCondicion.reset_index(inplace=True)
-
-    # Creating row "TOTAL"
-    df_saldosCondicion.loc[df_saldosCondicion.index[-1]+1]= \
-        pd.Series(
-            df_saldosCondicion["SALDOCUENTA"].sum()
+    def _totalRow(df:pd.DataFrame):
+        # Creating row "TOTAL"
+        df.loc[df.index[-1]+1] = pd.Series(
+            df["SALDOCUENTA"].sum()
             , index= ["SALDOCUENTA"]
         )
-    # Fill the NaN in column "Cond Deuda Cliente"
-    df_saldosCondicion.fillna("TOTAL", inplace=True)
+        # Fill the NaN in column "Cond Deuda Cliente"
+        df.fillna({
+            "NOMBRE": "TOTAL"
+            , "Cond Deuda Cliente": ""
+        }, inplace=True)
 
-    df_saldosCondicion["Participación"] = (
-        df_saldosCondicion[["SALDOCUENTA"]]
-        / df_saldosCondicion[["SALDOCUENTA"]].sum()
+        return df
+
+
+    try:
+        # Filter
+        df_saldosExcedido = df_cuentasDeudoras[
+            df_cuentasDeudoras["Cond Deuda Cliente"] == "2-Excedido"
+        ].copy() # Avoid warning of view vs copy
+
+        df_saldosExcedido = _totalRow(df_saldosExcedido)
+
+        df_saldosExcedido.rename(columns={
+            "Cond Deuda Cliente": "Condición"
+            , "SALDOCUENTA": "Saldos"
+        }, inplace=True)
+
+
+        df_saldosExcedido_Estilo = _estiladorVtaTitulo(
+            df_saldosExcedido
+            ,list_Col_Num=["Saldos"]
+            ,titulo="CLIENTES DEUDORES EXCEDIDOS"
+        ).apply(_fondoColor, subset=["Condición"])
+
+        #display(df_saldosExcedido_Estilo)
+
+        # Get image from df_saldosExcedido_Estilo
+        _df_to_image(
+            df_saldosExcedido_Estilo
+            ,ubicacion
+            ,"DeudaExcedida.png"
+        )
+
+    except IndexError:
+        logger.info("Empty DataFrame, no debtors in category 2-Excedido")
+
+
+    ##########################################
+    # List of debtors with filter 3-Morosos
+    ##########################################
+
+    try:
+        # Filter
+        df_saldosMorosos = df_cuentasDeudoras[
+            df_cuentasDeudoras["Cond Deuda Cliente"] == "3-Moroso"
+        ].copy() # Avoid warning of view vs copy
+
+        df_saldosMorosos = _totalRow(df_saldosMorosos)
+
+        df_saldosMorosos.rename(columns={
+            "Cond Deuda Cliente": "Condición"
+            , "SALDOCUENTA": "Saldos"
+        }, inplace=True)
+
+        df_saldosMorosos_Estilo = _estiladorVtaTitulo(
+            df_saldosMorosos
+            ,list_Col_Num=["Saldos"]
+            ,titulo="CLIENTES DEUDORES MOROSOS"
+        ).apply(_fondoColor, subset=["Condición"])
+
+        #display(df_saldosMorosos_Estilo)
+
+        # Get image from df_saldosMorosos_Estilo
+        _df_to_image(
+            df_saldosMorosos_Estilo
+            ,ubicacion
+            ,"DeudaMorosa.png"
+        )
+
+    except IndexError:
+        logger.info("Empty DataFrame, no debtors in category 3-Moroso")
+
+    ##########################################
+    # List of debtors with filter 4-PREJUDICIAL
+    ##########################################
+
+
+    try:
+        # Filter
+        df_saldosPrejudicial = df_cuentasDeudoras[
+            df_cuentasDeudoras["Cond Deuda Cliente"] == "4-PREJUDICIAL"
+        ].copy() # Avoid warning of view vs copy
+
+        df_saldosPrejudicial = _totalRow(df_saldosPrejudicial)
+
+        df_saldosPrejudicial.rename(columns={
+            "Cond Deuda Cliente": "Condición"
+            , "SALDOCUENTA": "Saldos"
+        }, inplace=True)
+
+        df_saldosPrejudical_Estilo = _estiladorVtaTitulo(
+            df_saldosPrejudicial
+            ,list_Col_Num=["Saldos"]
+            ,titulo="CLIENTES DEUDORES PREJUDICIALES"
+        ).apply(_fondoColor, subset=["Condición"])
+
+        #display(df_saldosPrejudical_Estilo)
+
+        # Get image from df_saldosPrejudical_Estilo
+        _df_to_image(
+            df_saldosPrejudical_Estilo
+            ,ubicacion
+            ,"DeudaPrejudicial.png"
+        )
+
+    except IndexError:
+        logger.info("Empty DataFrame, no debtors in category 4-PREJUDICIAL")
+
+
+
+    ##########################################
+    # Debtors grouped and sum by "Cond Deuda Cliente" version
+    ##########################################
+
+    # Filter condition
+    df_saldosCondicion =  df_cuentasDeudoras[
+        df_cuentasDeudoras["Cond Deuda Cliente"] != "1-Normal"
+    ].copy() # Avoid warning of view vs copy
+
+    # Selecting columns
+    df_saldosCondicion = df_saldosCondicion[["Cond Deuda Cliente","SALDOCUENTA"]]
+    # Grouping and sum
+    df_saldosCondicion = df_saldosCondicion.groupby(["Cond Deuda Cliente"]).sum()
+    # Reset index
+    df_saldosCondicion.reset_index(inplace=True)
+
+    # Getting TOTAL ROW    
+    df_saldosConMora = _totalRow(df_saldosCondicion)
+
+    # Debt proportion rate
+    df_saldosConMora["Participación"] = (
+        df_saldosConMora[["SALDOCUENTA"]]
+        / df_saldosConMora[["SALDOCUENTA"]].sum()
         * 2 # Added "TOTAL" value requires multiply by 2 to get correct percentages
     )
 
-    df_saldosCondicion.rename(columns={
+    df_saldosConMora.rename(columns={
         "Cond Deuda Cliente": "Condición"
         , "SALDOCUENTA": "Saldos"
     }, inplace=True)
 
 
-    df_saldosCondicion_Estilo = _estiladorVtaTitulo(
-        df_saldosCondicion
+    df_saldosConMora_Estilo = _estiladorVtaTitulo(
+        df_saldosConMora
         ,list_Col_Num=["Saldos"]
         ,list_Col_Perc=["Participación"]
-        ,titulo="CLIENTES DEUDORES"
+        ,titulo="CLIENTES CON ATRASO"
     ).apply(_fondoColor, subset=["Condición"])
 
-    #display(df_saldosCondicion_Estilo)
+    #display(df_saldosConMora_Estilo)
 
-    # Get image from df_saldosCondicion_Estilo
+    # Get image from df_saldosConMora_Estilo
     _df_to_image(
-        df_saldosCondicion_Estilo
+        df_saldosConMora_Estilo
         ,ubicacion
-        ,"DeudaComercial.png"
+        ,"DeudasConAtraso.png"
     )
-
 
 
         
     # Timer
     tiempoFinal = pd.to_datetime("today")
-    logger.info(
-        "Info Condición Deudores"
+    logger.info("Info Deudores Con Atraso"
         + "\nTiempo de Ejecucion Total: "
         + str(tiempoFinal-tiempoInicio)
     )
@@ -395,4 +524,4 @@ def condicionDeudores():
 
 
 if __name__ == "__main__":
-    condicionDeudores()
+    deudoresConAtraso()
