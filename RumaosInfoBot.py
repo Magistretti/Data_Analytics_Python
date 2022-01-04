@@ -785,7 +785,9 @@ def envio_reporte_CFO(context):
 
     context.bot.send_message(
         chat_id=chat_id
-        , text="INFORMES AUTOMÁTICOS " + fechahoy
+        , text="INFORMES AUTOMÁTICOS "
+            + fechahoy
+            + "\n Datos actualizados al momento de emisión"
     )
 
     context.bot.send_photo(
@@ -817,7 +819,15 @@ def envio_reporte_CFO(context):
         , open(find("DeudaComercial.png", ubic), "rb")
         , "DeudaComercial.png"
     )
-
+    context.bot.send_message(
+        chat_id=chat_id
+        , text=
+        """
+        Se consideran "4-Morosos Graves" a aquellos deudores que no han 
+        realizado compras en los últimos 60 días o si sus "Días Adeudados
+        de Venta" superan los 60 días.
+        """
+    )
 
 
 #########################
