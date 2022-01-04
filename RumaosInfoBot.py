@@ -203,8 +203,8 @@ def start(update, context) -> None:
                 , callback_data="Volumen Ventas Ayer")
         ]
         , [
-            InlineKeyboardButton("Info Morosos"
-                , callback_data="Info Morosos")
+            InlineKeyboardButton("Info Deudas Atrasadas"
+                , callback_data="Info Deudas Atrasadas")
             , InlineKeyboardButton("Info Penetración"
                 , callback_data="Info Penetración")
         ]
@@ -241,15 +241,27 @@ def button(update, context) -> None:
 
     query.edit_message_text(text=f"Opción Seleccionada: {query.data}")
 
-    # INFO MOROSOS
-    if query.data == "Info Morosos":
+    # INFO DEUDAS CON ATRASO
+    if query.data == "Info Deudas Atrasadas":
         try:
-            run_path(filePath_Info_Morosos+"Morosos.py")
+            deudoresConAtraso()
             query.bot.send_photo(update.effective_chat.id
-                , open(filePath_Info_Morosos+"Info_Morosos.png"
-                    , "rb"
-                )
+                , open(find("DeudasConAtraso.png", ubic), "rb")
             )
+            query.bot.send_photo(update.effective_chat.id
+                , open(find("DeudaExcedida.png", ubic), "rb")
+            )
+            query.bot.send_photo(update.effective_chat.id
+                , open(find("DeudaMorosa.png", ubic), "rb")
+            )
+            query.bot.send_photo(update.effective_chat.id
+                , open(find("DeudaPrejudicial.png", ubic), "rb")
+            )
+            query.bot.send_document(update.effective_chat.id
+                , open(find("DeudaPrejudicial.png", ubic), "rb")
+                , "ClientesConAtraso.xlsx"
+            )
+
         except Exception as e:
             query.bot.send_message(update.effective_chat.id
                 , text="Algo falló, revisar consola")
