@@ -112,8 +112,11 @@ def _get_df_GSheet(spreadsheetID, range):
     # If we dont have data today, get a DF with zeroes
     elif len(df_checkData.index) == 0:
         df_zeroValues = pd.DataFrame({
-            "UEN": "ECheq"
-            , "Saldo Final": 0
+            "Bancos": ["BBVA", "Santander", "SPV"]
+            , "Saldo Inicial": [0, 0, 0]
+            , "Ingresos": [0, 0, 0]
+            , "Egresos": [0, 0, 0]
+            , "Saldo Final": [0, 0, 0]
         })
         df_gSheetData = df_zeroValues
         
