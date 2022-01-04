@@ -88,7 +88,6 @@ def find(name, path, type="file"):
 ######//////////////######
 # Where to find the report image files of:
 # "Info_Morosos.png", "Info_VolumenVentas.png", etc
-filePath_Info_Morosos = find("InfoMorosos", ubic, "dir") + "\\"
 filePath_InfoVtaComb = find("InfoVtaCombustibles", ubic, "dir") + "\\"
 filePath_InfoGrandesDeudas = find("InfoDeuda", ubic, "dir") + "\\"
 filePath_Info_Despachos_Camioneros = \
@@ -258,7 +257,7 @@ def button(update, context) -> None:
                 , open(find("DeudaPrejudicial.png", ubic), "rb")
             )
             query.bot.send_document(update.effective_chat.id
-                , open(find("DeudaPrejudicial.png", ubic), "rb")
+                , open(find("ClientesConAtraso.xlsx", ubic), "rb")
                 , "ClientesConAtraso.xlsx"
             )
 
