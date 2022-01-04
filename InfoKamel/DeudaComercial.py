@@ -103,6 +103,18 @@ def _get_df(conexMSSQL):
 #print(df_cuentasDeudoras.head(20))
 
 
+# Get auxiliary table of debtors from Excel to a series
+def _get_series_excel(ubicacion, nombre, hoja):
+    df = pd.read_excel(
+        ubicacion + nombre
+        , hoja
+        , header=0
+        , usecols=["NROCLIENTE"]
+        , squeeze=True
+    )
+
+    return df
+
 
 #######################################
 # -Create column "Cond Deuda Cliente"
@@ -119,15 +131,18 @@ def _categorias(dias):
     elif dias < 60:
         return "3-Moroso"
     else:
-        return "4-PREJUDICIAL"
+        return "4-Moroso Grave"
 
-def _condDeuda(diasAdeudados, diasUltCompra):
+def _condDeuda(nrocliente, ref_incobrable, diasAdeudados, diasUltCompra):
     """
     This function apply the logic between "Días Venta Adeud" and
     "Días Desde Última Compra" to choose which is going to be use to
-    determine the category of debtor
+    determine the category of debtor, it also add the category "5-INCOBRABLE"
+    acording to a list of client numbers
     """
-    if diasUltCompra < 20:
+    if nrocliente in ref_incobrable.values.astype(str):
+        return "5-INCOBRABLE"
+    elif diasUltCompra < 20:
         return _categorias(diasAdeudados)
     elif diasUltCompra >= diasAdeudados:
         return _categorias(diasUltCompra)
@@ -144,8 +159,13 @@ def _fondoColor(dataframe):
     return ["background-color: green" if valor == "1-Normal" 
         else "background-color: yellow" if valor == "2-Excedido"
         else "background-color: orange" if valor == "3-Moroso"
-        else "background-color: red" if valor == "4-PREJUDICIAL" 
+        else "background-color: red" if valor == "4-Moroso Grave"
+        else "background-color: black" if valor == "5-INCOBRABLE"
         else "background-color: black" for valor in dataframe]
+
+def _letraColor(dataframe):
+    return ["color: white" if valor == "5-INCOBRABLE"
+        else "color: default" for valor in dataframe]
 
 
 def _estiladorVtaTitulo(
@@ -256,15 +276,22 @@ def condicionDeudores():
 
     # Get DFs
     df_cuentasDeudoras = _get_df(conexMSSQL)
+    sr_incobrables = _get_series_excel(
+        ubicacion
+        , "Incobrables.xlsx"
+        , "Incobrables"
+    )
 
     # Clean and transform DFs
     df_cuentasDeudoras["Cond Deuda Cliente"] = \
-    df_cuentasDeudoras.apply(
-        lambda row: _condDeuda(
-            row["Días Venta Adeud"]
-            , row["Días Desde Última Compra"]
-        ), axis= 1
-    )
+        df_cuentasDeudoras.apply(
+            lambda row: _condDeuda(
+                row["NROCLIENTE"]
+                ,sr_incobrables
+                ,row["Días Venta Adeud"]
+                , row["Días Desde Última Compra"]
+            ), axis= 1
+        )
 
 
     #############################
@@ -369,7 +396,8 @@ def condicionDeudores():
         ,list_Col_Num=["Saldos"]
         ,list_Col_Perc=["Participación"]
         ,titulo="CLIENTES DEUDORES"
-    ).apply(_fondoColor, subset=["Condición"])
+    ).apply(_fondoColor, subset=["Condición"]) \
+    .apply(_letraColor, subset=["Condición"])
 
     #display(df_saldosCondicion_Estilo)
 
