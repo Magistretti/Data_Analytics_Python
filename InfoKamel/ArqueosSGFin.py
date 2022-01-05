@@ -349,8 +349,15 @@ def _get_df_GSheet(spreadsheetID, range):
         df_gSheetData["Fecha"] == pd.to_datetime("today").normalize()
     ].copy() # .copy() will avoid raising "SettingWithCopyWarning"
 
-    # In case of empty values (""), replace them with zero
-    df_checkData.replace({"": 0}, inplace=True)
+    # In case of empty values ("") or hyphen ("-"), replace them with zero
+    df_checkData.replace(
+        {
+            "Dólares": {"": 0, "-": 0}
+            , "Dólares Pesificados": {"": 0, "-": 0}
+            , "Tipo de Cambio": {"": 1, "-": 1}
+        }
+        , inplace=True
+    )
     
     # Fill NaN with zero in case of missing data
     df_checkData.fillna({
