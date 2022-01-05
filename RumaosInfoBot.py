@@ -43,7 +43,7 @@ from InfoKamel.ChequesSaldosSGFin import chequesSaldos
 from InfoKamel.DeudaComercial import condicionDeudores
 from InfoKamel.BancosSaldos import bancosSaldos
 
-from InfoDeudaConAtraso.DeudaConAtraso import deudoresConAtraso
+
 
 
 #####//////////////######
