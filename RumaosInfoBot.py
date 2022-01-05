@@ -196,14 +196,14 @@ def start(update, context) -> None:
     # This will create inline buttons
     keyboard = [
         [
-            InlineKeyboardButton("Info Deudas"
-                , callback_data="Info Deudas")
+            InlineKeyboardButton("Info Grandes Deudas"
+                , callback_data="Info Grandes Deudas")
             , InlineKeyboardButton("Volumen Ventas Ayer"
                 , callback_data="Volumen Ventas Ayer")
         ]
         , [
-            InlineKeyboardButton("Info Deudas Atrasadas"
-                , callback_data="Info Deudas Atrasadas")
+            InlineKeyboardButton("Info Deudas Comerciales"
+                , callback_data="Info Deudas Comerciales")
             , InlineKeyboardButton("Info Penetración"
                 , callback_data="Info Penetración")
         ]
@@ -240,12 +240,12 @@ def button(update, context) -> None:
 
     query.edit_message_text(text=f"Opción Seleccionada: {query.data}")
 
-    # INFO DEUDAS CON ATRASO
-    if query.data == "Info Deudas Atrasadas":
+    # INFO DEUDAS COMERCIALES
+    if query.data == "Info Deudas Comerciales":
         try:
-            deudoresConAtraso()
+            condicionDeudores()
             query.bot.send_photo(update.effective_chat.id
-                , open(find("DeudasConAtraso.png", ubic), "rb")
+                , open(find("DeudaComercial.png", ubic), "rb")
             )
             query.bot.send_photo(update.effective_chat.id
                 , open(find("DeudaExcedida.png", ubic), "rb")
@@ -254,11 +254,11 @@ def button(update, context) -> None:
                 , open(find("DeudaMorosa.png", ubic), "rb")
             )
             query.bot.send_photo(update.effective_chat.id
-                , open(find("DeudaPrejudicial.png", ubic), "rb")
+                , open(find("DeudaMorosaGrave.png", ubic), "rb")
             )
             query.bot.send_document(update.effective_chat.id
-                , open(find("ClientesConAtraso.xlsx", ubic), "rb")
-                , "ClientesConAtraso.xlsx"
+                , open(find("ClientesDeudores.xlsx", ubic), "rb")
+                , "ClientesDeudores.xlsx"
             )
 
         except Exception as e:
@@ -281,7 +281,7 @@ def button(update, context) -> None:
             logger.error("", exc_info=1)
 
     # INFO GRANDES DEUDAS
-    elif query.data == "Info Deudas":
+    elif query.data == "Info Grandes Deudas":
         try:
             run_path(filePath_InfoGrandesDeudas+"GrandesDeudas.py")
             query.bot.send_photo(update.effective_chat.id
@@ -395,7 +395,7 @@ def set_envioDiario(update, context) -> None:
         job_removed = remove_job_if_exists("info_diario", context)
 
         # Setting daily task       
-        context.job_queue.run_daily(envio_automatico
+        context.job_queue.run_daily(envio_reporte_ivo
             , horario_tz
             , name="info_diario"
         )
@@ -454,7 +454,9 @@ def unset(update, context) -> None:
 @developerOnly
 def forzar_envio(update, context) -> None:
     update.message.reply_text("Enviando informes al canal en 10 seg")
-    context.job_queue.run_once(envio_automatico, 10, name="envio_forzado")
+    context.job_queue.run_once(envio_reporte_ivo, 10, name="envio_forzado")
+
+
 
 
 #########################
@@ -462,17 +464,17 @@ def forzar_envio(update, context) -> None:
 #########################
 
 # Reset all reports and send them to the designated channel
-def envio_automatico(context):
+def envio_reporte_ivo(context):
     logger.info("\n->Comenzando generación de informes<-")
 
     try:
-        deudoresConAtraso()
-        logger.info("Info deudoresConAtraso reseteado")
+        condicionDeudores()
+        logger.info("Info condicionDeudores reseteado")
     except Exception as e:
         context.bot.send_message(id_Autorizados[0]
-            , text="Error al resetear Info deudoresConAtraso"
+            , text="Error al resetear Info condicionDeudores"
         )
-        logger.error("Error al resetear Info deudoresConAtraso", exc_info=1)
+        logger.error("Error al resetear Info condicionDeudores", exc_info=1)
 
     try:
         run_path(filePath_InfoVtaComb+"TotalesPorCombustible.py")
@@ -563,32 +565,14 @@ def envio_automatico(context):
 
         context.bot.send_photo(
             ids
-            , open(find("DeudasConAtraso.png", ubic), "rb")
-            , "Deudas con Atraso"
-        )
-
-        context.bot.send_photo(
-            ids
-            , open(find("DeudaExcedida.png", ubic), "rb")
-            , "Deudas Excedidas"
-        )
-
-        context.bot.send_photo(
-            ids
-            , open(find("DeudaMorosa.png", ubic), "rb")
-            , "Deudas Morosas"
-        )
-        
-        context.bot.send_photo(
-            ids
-            , open(find("DeudaPrejudicial.png", ubic), "rb")
-            , "Deudas Prejudiciales"
+            , open(find("DeudaComercial.png", ubic), "rb")
+            , "Deuda Comercial"
         )
 
         context.bot.send_document(
             ids
-            , open(find("ClientesConAtraso.xlsx", ubic), "rb")
-            , "ClientesConAtraso.xlsx"
+            , open(find("ClientesDeudores.xlsx", ubic), "rb")
+            , "ClientesDeudores.xlsx"
         )
 
         context.bot.send_photo(
@@ -634,8 +618,8 @@ def envio_reporte_comercial(context):
 
     context.bot.send_photo(
         chat_id
-        , open(find("DeudasConAtraso.png", ubic), "rb")
-        , "Deudas con Atraso"
+        , open(find("DeudaComercial.png", ubic), "rb")
+        , "Deuda Comercial"
     )
 
     context.bot.send_photo(
@@ -652,14 +636,14 @@ def envio_reporte_comercial(context):
     
     context.bot.send_photo(
         chat_id
-        , open(find("DeudaPrejudicial.png", ubic), "rb")
-        , "Deudas Prejudiciales"
+        , open(find("DeudaMorosaGrave.png", ubic), "rb")
+        , "Deudas Morosas Graves"
     )
 
     context.bot.send_document(
         chat_id
-        , open(find("ClientesConAtraso.xlsx", ubic), "rb")
-        , "ClientesConAtraso.xlsx"
+        , open(find("ClientesDeudores.xlsx", ubic), "rb")
+        , "ClientesDeudores.xlsx"
     )
 
     context.bot.send_photo(
@@ -828,6 +812,11 @@ def envio_reporte_CFO(context):
         de Venta" superan los 60 días.
         """
     )
+    context.bot.send_document(
+        chat_id
+        , open(find("ClientesDeudores.xlsx", ubic), "rb")
+        , "ClientesDeudores.xlsx"
+    )
 
 
 #########################
@@ -977,7 +966,7 @@ def main() -> None:
     # updater.job_queue.run_repeating(callback_minute, interval=60, first=10)
     # updater.job_queue.run_once(envio_reporte_cheques, 15)
 
-    updater.job_queue.run_daily(envio_automatico
+    updater.job_queue.run_daily(envio_reporte_ivo
         , dt.time(11,0,0,tzinfo=argTime) 
         , name="info_diario"
     )
