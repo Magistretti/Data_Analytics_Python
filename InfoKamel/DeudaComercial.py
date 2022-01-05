@@ -190,7 +190,7 @@ ARGS:
         .hide_index() \
         .set_caption(
             titulo
-            + "<br>"
+            + " "
             + (pd.to_datetime("today")
             .strftime("%d/%m/%y"))
         ) \
@@ -407,6 +407,132 @@ def condicionDeudores():
         ,ubicacion
         ,"DeudaComercial.png"
     )
+
+
+
+    ##########################################
+    # List of debtors with filter 2-Excedido
+    ##########################################
+
+    def _totalRow(df:pd.DataFrame):
+        # Creating row "TOTAL"
+        df.loc[df.index[-1]+1] = pd.Series(
+            df["SALDOCUENTA"].sum()
+            , index= ["SALDOCUENTA"]
+        )
+        # Fill the NaN in column "Cond Deuda Cliente"
+        df.fillna({
+            "NOMBRE": "TOTAL"
+            , "Cond Deuda Cliente": ""
+        }, inplace=True)
+
+        return df
+
+
+    try:
+        # Filter
+        df_saldosExcedido = df_cuentasDeudoras[
+            df_cuentasDeudoras["Cond Deuda Cliente"] == "2-Excedido"
+        ].copy() # Avoid warning of view vs copy
+
+        df_saldosExcedido = _totalRow(df_saldosExcedido)
+
+        df_saldosExcedido.rename(columns={
+            "Cond Deuda Cliente": "Condición"
+            , "SALDOCUENTA": "Saldos"
+        }, inplace=True)
+
+
+        df_saldosExcedido_Estilo = _estiladorVtaTitulo(
+            df_saldosExcedido
+            ,list_Col_Num=["Saldos"]
+            ,titulo="CLIENTES DEUDORES EXCEDIDOS"
+        ).apply(_fondoColor, subset=["Condición"])
+
+        #display(df_saldosExcedido_Estilo)
+
+        # Get image from df_saldosExcedido_Estilo
+        _df_to_image(
+            df_saldosExcedido_Estilo
+            ,ubicacion
+            ,"DeudaExcedida.png"
+        )
+
+    except IndexError:
+        logger.info("Empty DataFrame, no debtors in category 2-Excedido")
+
+
+    ##########################################
+    # List of debtors with filter 3-Morosos
+    ##########################################
+
+    try:
+        # Filter
+        df_saldosMorosos = df_cuentasDeudoras[
+            df_cuentasDeudoras["Cond Deuda Cliente"] == "3-Moroso"
+        ].copy() # Avoid warning of view vs copy
+
+        df_saldosMorosos = _totalRow(df_saldosMorosos)
+
+        df_saldosMorosos.rename(columns={
+            "Cond Deuda Cliente": "Condición"
+            , "SALDOCUENTA": "Saldos"
+        }, inplace=True)
+
+        df_saldosMorosos_Estilo = _estiladorVtaTitulo(
+            df_saldosMorosos
+            ,list_Col_Num=["Saldos"]
+            ,titulo="CLIENTES DEUDORES MOROSOS"
+        ).apply(_fondoColor, subset=["Condición"])
+
+        #display(df_saldosMorosos_Estilo)
+
+        # Get image from df_saldosMorosos_Estilo
+        _df_to_image(
+            df_saldosMorosos_Estilo
+            ,ubicacion
+            ,"DeudaMorosa.png"
+        )
+
+    except IndexError:
+        logger.info("Empty DataFrame, no debtors in category 3-Moroso")
+
+    ##########################################
+    # List of debtors with filter 4-Moroso Grave
+    ##########################################
+
+
+    try:
+        # Filter
+        df_saldosMorosoGrave = df_cuentasDeudoras[
+            df_cuentasDeudoras["Cond Deuda Cliente"] == "4-Moroso Grave"
+        ].copy() # Avoid warning of view vs copy
+
+        df_saldosMorosoGrave = _totalRow(df_saldosMorosoGrave)
+
+        df_saldosMorosoGrave.rename(columns={
+            "Cond Deuda Cliente": "Condición"
+            , "SALDOCUENTA": "Saldos"
+        }, inplace=True)
+
+        df_saldosMorosoGrave_Estilo = _estiladorVtaTitulo(
+            df_saldosMorosoGrave
+            ,list_Col_Num=["Saldos"]
+            ,titulo="CLIENTES DEUDORES MOROSOS GRAVES"
+        ).apply(_fondoColor, subset=["Condición"])
+
+        #display(df_saldosMorosoGrave_Estilo)
+
+        # Get image from df_saldosMorosoGrave_Estilo
+        _df_to_image(
+            df_saldosMorosoGrave_Estilo
+            ,ubicacion
+            ,"DeudaMorosaGrave.png"
+        )
+
+    except IndexError:
+        logger.info("Empty DataFrame, no debtors in category 4-Moroso Grave")
+
 
 
 
