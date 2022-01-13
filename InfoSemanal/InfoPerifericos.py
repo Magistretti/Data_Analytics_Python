@@ -969,136 +969,149 @@ def _get_pan(conexCentral, conexAZMil, conexPIMil):
 ##########################################################
 # Get dataframes of "Lubriplaya" sales
 ##########################################################
-#conexCentral
-df_lubri = pd.read_sql(
+
+def _get_lubriplaya(conexCentral):
     """
-    -- Cantidades e importes totales vendidos de Lubriplaya para 
-    -- un período determinado
+    Sales of filters and lubes of actual week and previous week
+    """
+
+    df_lubri = pd.read_sql(
+        """
+        -- Cantidades e importes totales vendidos de Lubriplaya para 
+        -- un período determinado
 
 
-    DECLARE @ayer date
-    set @ayer = GETDATE()-1
-    DECLARE @semanaAtras date
-    set @semanaAtras = GETDATE()-8
-    DECLARE @dosSemanasAtras date
-    set @dosSemanasAtras = GETDATE()-15;
+        DECLARE @ayer date
+        set @ayer = GETDATE()-1
+        DECLARE @semanaAtras date
+        set @semanaAtras = GETDATE()-8
+        DECLARE @dosSemanasAtras date
+        set @dosSemanasAtras = GETDATE()-15;
 
 
-    WITH actual as ( -- CTE con datos de la semana actual
-        SELECT
-            RTRIM(t.UEN) as 'UEN'
-            ,sum(t.[Unid Vendidas]) as 'Unid Vend Sem Actual'
-            ,sum(t.[Importe Total]) as 'Importe Total Sem Actual'
-        FROM(
+        WITH actual as ( -- CTE con datos de la semana actual
+            SELECT
+                RTRIM(t.UEN) as 'UEN'
+                ,sum(t.[Unid Vendidas]) as 'Unid Vend Sem Actual'
+                ,sum(t.[Importe Total]) as 'Importe Total Sem Actual'
+            FROM(
+                SELECT 
+                [UEN]
+
+                ,sum([CANTIDAD]) as 'Unid Vendidas'
+
+                ,sum([IMPORTE]) as 'Importe Total'
+
+            FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
+            WHERE CAST(FECHASQL as date) > @semanaAtras
+                and CAST(FECHASQL as date) <= @ayer
+                and AGRUPACION = 'FILTROS'
+                AND UEN = 'PUENTE OLIVE'
+            GROUP BY UEN
+
+            UNION ALL
+
             SELECT 
-            [UEN]
+                [UEN]
 
-            ,sum([CANTIDAD]) as 'Unid Vendidas'
+                ,sum(-[CANTIDAD]) as 'Unid Vendidas'
 
-            ,sum([IMPORTE]) as 'Importe Total'
+                ,sum([IMPORTE]) as 'Importe Total'
 
-        FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-        WHERE CAST(FECHASQL as date) > @semanaAtras
-            and CAST(FECHASQL as date) <= @ayer
-            and AGRUPACION = 'FILTROS'
-            AND UEN = 'PUENTE OLIVE'
+            FROM [Rumaos].[dbo].[VMovDet] WITH (NOLOCK)
+            WHERE CAST(FECHASQL as date) > @semanaAtras
+                and CAST(FECHASQL as date) <= @ayer
+                and IMPORTE > '0'
+            GROUP BY UEN
+        ) as t
         GROUP BY UEN
+        ),
 
-        UNION ALL
+        anterior as ( -- CTE con datos de la semana anterior
+            SELECT
+                RTRIM(t.UEN) as 'UEN'
+                ,sum(t.[Unid Vendidas]) as 'Unid Vend Sem Ant'
+                ,sum(t.[Importe Total]) as 'Importe Total Sem Ant'
+            FROM(
+                SELECT 
+                [UEN]
 
-        SELECT 
-            [UEN]
+                ,sum([CANTIDAD]) as 'Unid Vendidas'
 
-            ,sum(-[CANTIDAD]) as 'Unid Vendidas'
+                ,sum([IMPORTE]) as 'Importe Total'
 
-            ,sum([IMPORTE]) as 'Importe Total'
+            FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
+            WHERE CAST(FECHASQL as date) > @dosSemanasAtras
+                and CAST(FECHASQL as date) <= @semanaAtras
+                and AGRUPACION = 'FILTROS'
+                AND UEN = 'PUENTE OLIVE'
+            GROUP BY UEN
 
-        FROM [Rumaos].[dbo].[VMovDet] WITH (NOLOCK)
-        WHERE CAST(FECHASQL as date) > @semanaAtras
-            and CAST(FECHASQL as date) <= @ayer
-            and IMPORTE > '0'
-        GROUP BY UEN
-    ) as t
-    GROUP BY UEN
-    ),
+            UNION ALL
 
-    anterior as ( -- CTE con datos de la semana anterior
-        SELECT
-            RTRIM(t.UEN) as 'UEN'
-            ,sum(t.[Unid Vendidas]) as 'Unid Vend Sem Ant'
-            ,sum(t.[Importe Total]) as 'Importe Total Sem Ant'
-        FROM(
             SELECT 
-            [UEN]
+                [UEN]
 
-            ,sum([CANTIDAD]) as 'Unid Vendidas'
+                ,sum(-[CANTIDAD]) as 'Unid Vendidas'
 
-            ,sum([IMPORTE]) as 'Importe Total'
+                ,sum([IMPORTE]) as 'Importe Total'
 
-        FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-        WHERE CAST(FECHASQL as date) > @dosSemanasAtras
-            and CAST(FECHASQL as date) <= @semanaAtras
-            and AGRUPACION = 'FILTROS'
-            AND UEN = 'PUENTE OLIVE'
+            FROM [Rumaos].[dbo].[VMovDet] WITH (NOLOCK)
+            WHERE CAST(FECHASQL as date) > @dosSemanasAtras
+                and CAST(FECHASQL as date) <= @semanaAtras
+                and IMPORTE > '0'
+            GROUP BY UEN
+        ) as t
         GROUP BY UEN
+        )
 
-        UNION ALL
 
-        SELECT 
-            [UEN]
+        select
+            actual.UEN
+            ,anterior.[Unid Vend Sem Ant]
+            ,actual.[Unid Vend Sem Actual]
+            ,anterior.[Importe Total Sem Ant]
+            ,actual.[Importe Total Sem Actual]
 
-            ,sum(-[CANTIDAD]) as 'Unid Vendidas'
-
-            ,sum([IMPORTE]) as 'Importe Total'
-
-        FROM [Rumaos].[dbo].[VMovDet] WITH (NOLOCK)
-        WHERE CAST(FECHASQL as date) > @dosSemanasAtras
-            and CAST(FECHASQL as date) <= @semanaAtras
-            and IMPORTE > '0'
-        GROUP BY UEN
-    ) as t
-    GROUP BY UEN
+        FROM actual
+        Left join anterior
+            ON actual.UEN = anterior.UEN
+        Order by UEN
+        """
+        , conexCentral
     )
 
+    # print(df_lubri.info(), df_lubri)
 
-    select
-        actual.UEN
-        ,anterior.[Unid Vend Sem Ant]
-        ,actual.[Unid Vend Sem Actual]
-        ,anterior.[Importe Total Sem Ant]
-        ,actual.[Importe Total Sem Actual]
 
-    FROM actual
-    Left join anterior
-        ON actual.UEN = anterior.UEN
-    Order by UEN
-    """
-    , conexCentral
-)
+    ##########################################################
+    # Adding Total Row and "Var %" columns
+    ##########################################################
 
-# print(df_lubri.info(), df_lubri)
+    # Creating Total Row
+    _temp_tot = df_lubri.drop(columns=["UEN"]).sum()
+    _temp_tot["UEN"] = "TOTAL"
+
+    # Appending Total Row
+    df_lubri = df_lubri.append(_temp_tot, ignore_index=True)
+
+    # Create columns "Var % Cantidad"
+    df_lubri["Var % Cantidad"] = \
+        df_lubri["Unid Vend Sem Actual"] / df_lubri["Unid Vend Sem Ant"] -1
+
+    # Create columns "Var % Importe"
+    df_lubri["Var % Importe"] = (
+        df_lubri["Importe Total Sem Actual"] 
+        / df_lubri["Importe Total Sem Ant"] 
+        -1
+    )
+
+    # print(df_lubri)
+
+    return df_lubri
+
 
 
 ##########################################################
-# Adding Total Row and "Var %" columns
+# Get dataframes of "Grill" sales
 ##########################################################
-
-# Creating Total Row
-_temp_tot = df_lubri.drop(columns=["UEN"]).sum()
-_temp_tot["UEN"] = "TOTAL"
-
-# Appending Total Row
-df_lubri = df_lubri.append(_temp_tot, ignore_index=True)
-
-# Create columns "Var % Cantidad"
-df_lubri["Var % Cantidad"] = \
-    df_lubri["Unid Vend Sem Actual"] / df_lubri["Unid Vend Sem Ant"] -1
-
-# Create columns "Var % Importe"
-df_lubri["Var % Importe"] = (
-    df_lubri["Importe Total Sem Actual"] 
-    / df_lubri["Importe Total Sem Ant"] 
-    -1
-)
-
-print(df_lubri)
