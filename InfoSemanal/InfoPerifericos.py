@@ -27,10 +27,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-conexCentral = conectorMSSQL(login)
-conexAZMil = conectorMSSQL(loginAZMilenium)
-conexPIMil = conectorMSSQL(loginPIMilenium)
-
 
 ##########################################################
 # Getting "Servicompras" and "FULLs" dataframes
