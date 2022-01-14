@@ -37,6 +37,7 @@ from InfoSemanal.InfoPenetracionRMSemanal import penetracionRMSemanal
 from InfoSemanal.InfoRedControl import redControlSemanal
 from InfoSemanal.InfoVtaLiqProy import vtaSemanalProy_Liq_GNC
 from InfoSemanal.InfoVtasProyGranClient import vtaProyGranClient
+from InfoSemanal.InfoPerifericos import perifericoSemanal
 
 from InfoKamel.ArqueosSGFin import arqueos
 from InfoKamel.ChequesSaldosSGFin import chequesSaldos
@@ -862,6 +863,15 @@ def envio_reporte_semanal(context):
             , text="Error al resetear Info vtaProyGranClient"
         )
         logger.error("Error al resetear vtaProyGranClient", exc_info=1)
+    
+    try:
+        perifericoSemanal()
+        logger.info("Info Periferico Semanal reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info Periferico Semanal"
+        )
+        logger.error("Error al resetear Periferico Semanal", exc_info=1)
 
 
     weekStart = (dt.date.today()-dt.timedelta(days=7)).strftime("%d/%m/%y")
@@ -913,6 +923,18 @@ def envio_reporte_semanal(context):
             chat_id
             , open(find("Info_Penetración_Semanal.png", ubic), "rb")
             , "Penetración RedMás Semanal"
+        )
+    
+    context.bot.send_photo(
+            chat_id
+            , open(find("Info_Periferia_parte1.png", ubic), "rb")
+            , "Periferia Salón y Panadería"
+        )
+    
+    context.bot.send_photo(
+            chat_id
+            , open(find("Info_Periferia_parte2.png", ubic), "rb")
+            , "Periferia Lubriplaya y Grill"
         )
 
 
