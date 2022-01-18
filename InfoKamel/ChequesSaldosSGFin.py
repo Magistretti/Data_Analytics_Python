@@ -356,6 +356,9 @@ def chequesSaldos():
     # Renaming NA in "UEN" column to "TOTAL"
     df_chequesConEcheq.fillna({"UEN": "TOTAL"}, inplace=True)
 
+    # Resetting index to avoid styler error of duplicate index
+    df_chequesConEcheq.reset_index(drop=True, inplace=True)
+    
     # Styling of DF
     df_chequesConEcheq_Estilo = _estiladorVtaTitulo(
         df_chequesConEcheq
