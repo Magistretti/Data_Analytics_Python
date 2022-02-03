@@ -43,6 +43,7 @@ from InfoKamel.ArqueosSGFin import arqueos
 from InfoKamel.ChequesSaldosSGFin import chequesSaldos
 from InfoKamel.DeudaComercial import condicionDeudores
 from InfoKamel.BancosSaldos import bancosSaldos
+from InfoKamel.UsosSGFin import usos_SGFin
 
 
 
@@ -720,6 +721,7 @@ def envio_reporte_cheques(context):
 # chequesSaldos
 # bancosSaldos
 # condicionDeudores
+# usos_SGFin
 
 
 def envio_reporte_CFO(context):
@@ -762,6 +764,15 @@ def envio_reporte_CFO(context):
         )
         logger.error("Error al resetear condicionDeudores", exc_info=1)
 
+    try:
+        usos_SGFin()
+        logger.info("Info Usos_SGFin reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info Usos_SGFin"
+        )
+        logger.error("Error al resetear Usos_SGFin", exc_info=1)
+
 
     fechahoy = dt.datetime.now().strftime("%d/%m/%y")
 
@@ -797,6 +808,12 @@ def envio_reporte_CFO(context):
         chat_id
         , open(find("BancosSaldos.png", ubic), "rb")
         , "ChequesSaldos.png"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(find("Usos_SGFin.png", ubic), "rb")
+        , "Usos_SGFin.png"
     )
 
     context.bot.send_photo(
