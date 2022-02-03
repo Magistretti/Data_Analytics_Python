@@ -13,10 +13,8 @@ sys.path.insert(0,str(pathlib.Path(__file__).parent.parent))
 
 import pandas as pd
 import dataframe_image as dfi
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
 
-from DatosLogin import login, loginSGFin, googleSheet_InfoKamel
+from DatosLogin import loginSGFin
 from Conectores import conectorMSSQL
 
 import logging
