@@ -807,7 +807,7 @@ def envio_reporte_CFO(context):
     context.bot.send_photo(
         chat_id
         , open(find("BancosSaldos.png", ubic), "rb")
-        , "ChequesSaldos.png"
+        , "BancosSaldos.png"
     )
 
     context.bot.send_photo(
