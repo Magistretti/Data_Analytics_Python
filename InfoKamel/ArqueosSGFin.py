@@ -329,7 +329,7 @@ def _get_df_GSheet(spreadsheetID, range):
 
     # Get the values of the sheet from the Json. This will be a list of lists
     response = response.get("values")
-    print(response)
+    
     # Transform response into a DF, use the first row has header
     df_gSheetData = pd.DataFrame(
         response[1:] # Row values
