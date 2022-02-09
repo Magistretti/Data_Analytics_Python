@@ -211,7 +211,12 @@ def _get_df_GSheet(spreadsheetID, range):
     )
 
     # Fill NaN with zero in case of missing data
-    df_checkData.fillna({"Saldo Final": 0}, inplace=True)
+    df_checkData.fillna(
+        {
+            "UEN": "ECheq"
+            ,"Saldo Final": 0
+        }, inplace=True
+    )
 
     # If we have data today, use today data and remove date column
     if len(df_checkData.index) > 0:
