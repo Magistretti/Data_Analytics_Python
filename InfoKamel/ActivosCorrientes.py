@@ -35,8 +35,8 @@ def _get_df_pesos(conexSGFin):
     df_pesos = pd.read_sql(
         """
         --------------------------
-        DECLARE @FECHA NVARCHAR(20)
-        SET @FECHA = '20220203';
+        DECLARE @FECHA as date
+        SET @FECHA = GETDATE();
         --------------------------
 
 
@@ -184,6 +184,12 @@ def _get_df_dolar(spreadsheetID, range):
     }, inplace=True)
 
 
+    df_gSheetData.insert(0, "ACTIVOS CORRIENTES", "STOCK EFECTIVO UENS DOLARES")
+    df_gSheetData = df_gSheetData[["ACTIVOS CORRIENTES", "Dólares Pesificados"]]
+    df_gSheetData.rename(columns={"Dólares Pesificados": "Saldo Final"}, inplace=True)
+    df_gSheetData = df_gSheetData.tail(1)
+
+
     
     return df_gSheetData
 
@@ -303,8 +309,14 @@ def _get_df_bank(spreadsheetID, range):
     # Naming blank in last row as "SALDO BANCOS"
     df_gSheetData.fillna({"Bancos": "SALDO BANCOS"}, inplace=True)
 
-    # Getting last row of column "Saldo Final"
-    df_gSheetData = df_gSheetData[["Saldo Final"]].loc[df_gSheetData.index[-1]]
+    # Insert column "Activos Corrientes"
+    df_gSheetData.insert(0,"ACTIVOS CORRIENTES", "SALDO EN BANCOS")
+
+    # Filtering columns
+    df_gSheetData = df_gSheetData[["ACTIVOS CORRIENTES", "Saldo Final"]]
+
+    # Getting last row
+    df_gSheetData = df_gSheetData.tail(1)
 
     return df_gSheetData
 
@@ -313,3 +325,525 @@ def _get_df_bank(spreadsheetID, range):
 # df = _get_df_bank(googleSheet_InfoKamel, "Bancos!A:F")
 
 # print(df)
+
+
+####################################################################
+# Get ending balance of checks wallet in a df from a SQL query
+####################################################################
+
+def _get_df_checks(conexSGFin):
+    df_cheque = pd.read_sql(
+        """
+        -- SALDO FINAL DE CHEQUES FISICOS EN CARTERA
+
+        -------------------------------
+        DECLARE @FechaAnalisis as date
+        SET @FechaAnalisis = GETDATE()
+        DECLARE @FechaAnterior as date
+        SET @FechaAnterior = DateADD(day,-1,@FechaAnalisis)
+        DECLARE @FechaLimVenc as date 
+        SET @FechaLimVenc = DateADD(day,-35,@FechaAnalisis)
+        ;
+        -------------------------------
+
+        SELECT
+            'CHEQUES EN CARTERA' as 'ACTIVOS CORRIENTES'
+                    
+            ,( --Saldo Final como suma de las variables anteriores
+                CAST(ROUND(SUM(Car.[Importe]), 0) as numeric(18,0)) 
+                +(
+                    SELECT
+                    ISNULL(ROUND(SUM(DIng.[Importe]),0),0) as 'INGRESOS'
+                    FROM [Sgfin].[dbo].[SGFIN_IngresoCaja] as Ing
+                    Inner JOIN dbo.SGFIN_DetalleIngreso as DIng
+                        ON Ing.Id = DIng.IdIngreso --Vinculando con el detalle de Egreso
+                    Left Outer JOIN dbo.SGFIN_Arqueo as arq
+                        ON Ing.[IdArqueo] = arq.Id --Vinculando con la fecha de la caja
+                    where DIng.IdCartera is not NULL --Solo Cheques
+                        And CAST(Arq.[Fecha] as date) = @FechaAnalisis
+                )
+                +(
+                    SELECT
+                    ISNULL(ROUND(SUM(-DEgr.[Importe]),0),0) as 'EGRESOS'
+                    FROM [Sgfin].[dbo].[SGFIN_EgresoCaja] as Egr
+                    Inner JOIN dbo.SGFIN_DetalleEgreso as DEgr
+                        ON Egr.Id = DEgr.IdEgreso --Vinculando con el detalle de Egreso
+                    Left Outer JOIN dbo.SGFIN_Arqueo as arq
+                        ON Egr.[IdArqueo] = arq.Id --Vinculando con la fecha de la caja
+                    where DEgr.IdCartera is not NULL --Solo Cheques
+                        And CAST(Arq.[Fecha] as date) = @FechaAnalisis
+                )
+            ) as 'Saldo Final'
+
+        FROM [Sgfin].[dbo].[SGFIN_Cartera] AS Car
+        -- Joins con las tablas [SGFIN_BoletaDeposito_Cartera] y [SGFIN_BoletaDeposito]
+        -- para obtener la fecha de depósito
+        LEFT OUTER JOIN [dbo].[SGFIN_BoletaDeposito_Cartera] AS BDCar
+            ON Car.Id = BDCar.IdCartera
+        LEFT OUTER JOIN dbo.[SGFIN_BoletaDeposito] AS BDep
+            ON BDCar.IdBoletaDeposito = BDep.Id
+                    
+            --FILTRANDO PARA OBTENER SALDO INICIAL DE CHEQUES
+        WHERE CAST(Car.FechaIngreso as date) < @FechaAnalisis--Todos los documentos ingresados hasta el día anterior
+            -- y con fecha de salida mayor a la del día anterior o nula
+            AND (CAST(FechaSalida as date) > @FechaAnterior OR Car.FechaSalida is NULL)
+            -- y con fecha de depósito mayor a la del día anterior o nula
+            AND (CAST(BDep.Fecha as date) > @FechaAnterior OR BDep.Fecha is NULL)
+            -- y con fecha de cobro mayor a la fecha de análisis menos 35 días
+            AND CAST(Car.FechaCobro as date) > @FechaLimVenc
+            -- y que el estado no sea "Rechazado"
+            AND Car.Estado <> '4'
+        """
+        , conexSGFin
+    )
+
+    return df_cheque
+
+
+
+####################################################################
+# Get ECheq stock into a DF from a Google Sheet
+####################################################################
+
+def _get_df_Echecks(spreadsheetID, range):
+    """
+    Will read the selected range of a sheet from GoogleSheet and will return
+    a dataframe. NOTE: dates will be imported as formatted strings and should
+    be transformed accordingly.
+    ARGS: \\
+    spreadsheetID: can be obtained from the share link. Example: 
+    https://docs.google.com/spreadsheets/d/<SpreadSheetID>/edit?usp=sharing \\
+    range: range of a sheet to read in A1 notation. Example: "Dólar!A:E"
+    """
+
+    # Scopes will limit what we can do with the sheet
+    SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'] # Read Only
+    SERVICE_ACCOUNT_FILE = \
+        str(pathlib.Path(__file__).parent.parent) + "\\quickstart.json"
+
+    # Credentials and service for the Sheets API
+    creds = service_account.Credentials.from_service_account_file(
+                SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+
+    service = build('sheets', 'v4', credentials=creds, cache_discovery=False)
+
+    # Call the Sheets API
+    sheet = service.spreadsheets()
+
+
+    request = sheet.values().get(
+        spreadsheetId=spreadsheetID # Spreadsheet ID
+        , range=range
+            # # valueRenderOption default to "FORMATTED_VALUE", it get strings
+        , valueRenderOption="UNFORMATTED_VALUE" # Will get numbers like numbers
+            # # dateTimeRenderOption default to "SERIAL_NUMBER" unless 
+            # # valueRenderOption is "FORMATTED_VALUE"
+        , dateTimeRenderOption="FORMATTED_STRING" # Will get dates as string
+    )
+
+    # Run the request
+    response = request.execute()
+
+    # Get the values of the sheet from the Json. This will be a list of lists
+    response = response.get("values")
+    
+    # Transform response into a DF, use the first row has header
+    df_gSheetData = pd.DataFrame(
+        response[1:] # Row values
+        , columns=response[0] # Headers
+    )
+
+    # Cast string of dates as datetime
+    df_gSheetData["Fecha"] = pd.to_datetime(
+        df_gSheetData["Fecha"]
+        , dayfirst=True # Specify that strings are in the ddmmyyyy format
+    )
+
+    df_gSheetData = df_gSheetData.convert_dtypes()
+    
+    # Get stock of today, today date is normalized to reset time part of date
+    df_checkData = df_gSheetData[
+        df_gSheetData["Fecha"] == pd.to_datetime("today").normalize()
+    ].copy() # .copy() will avoid raising "SettingWithCopyWarning"
+
+    # In case of empty values ("") or hyphen ("-"), replace them with zero
+    df_checkData.replace(
+        {"Saldo Final": {"": 0, "-": 0}}
+        , inplace=True
+    )
+
+    # Fill NaN with zero in case of missing data
+    df_checkData.fillna(
+        {
+            "UEN": "ECheq"
+            ,"Saldo Final": 0
+        }, inplace=True
+    )
+
+    # If we have data today, use today data and remove date column
+    if len(df_checkData.index) > 0:
+        df_gSheetData = df_checkData
+        df_gSheetData = df_gSheetData.drop(columns=["Fecha"])
+
+    # If we dont have data today, get a DF with zeroes
+    elif len(df_checkData.index) == 0:
+        df_zeroValues = pd.DataFrame({
+            "UEN": ["ECheq"]
+            , "Saldo Final": [0]
+        })
+        df_gSheetData = df_zeroValues
+
+    
+    df_gSheetData.insert(0, "ACTIVOS CORRIENTES", "ECHEQS EN CARTERA")
+    df_gSheetData = df_gSheetData.drop(columns="UEN")
+        
+
+    return df_gSheetData
+
+
+
+####################################################################
+# Get total debt of debtors in a df from a SQL query
+####################################################################
+
+def _get_df_debt(conexMSSQL):
+    df_deudores = pd.read_sql(
+        """
+        SELECT
+
+        'CUENTAS CORRIENTES POR COBRAR' as 'ACTIVOS CORRIENTES'
+        ,-ROUND(SUM(Cli.SALDOPREPAGO - Cli.SALDOREMIPENDFACTU),0) as 'Saldo Final'
+
+        FROM dbo.FacCli as Cli with (NOLOCK)
+
+        WHERE Cli.NROCLIPRO > '100000'
+            AND (Cli.SALDOPREPAGO - Cli.SALDOREMIPENDFACTU) < -1000
+            and Cli.ListaSaldoCC = 1
+        """
+        , conexMSSQL
+    )
+
+    return df_deudores
+
+
+
+####################################################################
+# Get cards pending crediting to a DF from a Google Sheet
+####################################################################
+
+def _get_df_cards(spreadsheetID, range):
+    """
+    Will read the selected range of a sheet from GoogleSheet and will return
+    a dataframe. NOTE: dates will be imported as formatted strings and should
+    be transformed accordingly.
+    ARGS: \\
+    spreadsheetID: can be obtained from the share link. Example: 
+    https://docs.google.com/spreadsheets/d/<SpreadSheetID>/edit?usp=sharing \\
+    range: range of a sheet to read in A1 notation. Example: "Dólar!A:E"
+    """
+
+    # Scopes will limit what we can do with the sheet
+    SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'] # Read Only
+    SERVICE_ACCOUNT_FILE = \
+        str(pathlib.Path(__file__).parent.parent) + "\\quickstart.json"
+
+    # Credentials and service for the Sheets API
+    creds = service_account.Credentials.from_service_account_file(
+                SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+
+    service = build('sheets', 'v4', credentials=creds, cache_discovery=False)
+
+    # Call the Sheets API
+    sheet = service.spreadsheets()
+
+
+    request = sheet.values().get(
+        spreadsheetId=spreadsheetID # Spreadsheet ID
+        , range=range
+            # # valueRenderOption default to "FORMATTED_VALUE", it get strings
+        , valueRenderOption="UNFORMATTED_VALUE" # Will get numbers like numbers
+            # # dateTimeRenderOption default to "SERIAL_NUMBER" unless 
+            # # valueRenderOption is "FORMATTED_VALUE"
+        , dateTimeRenderOption="FORMATTED_STRING" # Will get dates as string
+    )
+
+    # Run the request
+    response = request.execute()
+
+    # Get the values of the sheet from the Json. This will be a list of lists
+    response = response.get("values")
+    
+    # Transform response into a DF, use the first row has header
+    df_gSheetData = pd.DataFrame(
+        response[1:] # Row values
+        , columns=response[0] # Headers
+    )
+
+    # Cast string of dates as datetime
+    df_gSheetData["Fecha"] = pd.to_datetime(
+        df_gSheetData["Fecha"]
+        , dayfirst=True # Specify that strings are in the ddmmyyyy format
+    )
+
+    df_gSheetData = df_gSheetData.convert_dtypes()
+    
+    # Get stock of today, today date is normalized to reset time part of date
+    df_checkData = df_gSheetData[
+        df_gSheetData["Fecha"] == pd.to_datetime("today").normalize()
+    ].copy() # .copy() will avoid raising "SettingWithCopyWarning"
+
+    # In case of empty values ("") or hyphen ("-"), replace them with zero
+    df_checkData.replace(
+        {
+            "ACTIVOS CORRIENTES": {"": "TARJETAS POR ACREDITAR 24 HS"}
+            ,"Saldo Final": {"": 0, "-": 0}
+        }, inplace=True
+    )
+
+    # Fill NaN with zero in case of missing data
+    df_checkData.fillna(
+        {
+            "ACTIVOS CORRIENTES": "TARJETAS POR ACREDITAR 24 HS"
+            ,"Saldo Final": 0
+        }, inplace=True
+    )
+
+    # If we have data today, use today data and remove date column
+    if len(df_checkData.index) > 0:
+        df_gSheetData = df_checkData
+        df_gSheetData = df_gSheetData.drop(columns=["Fecha"])
+
+    # If we dont have data today, get a DF with zeroes
+    elif len(df_checkData.index) == 0:
+        df_zeroValues = pd.DataFrame({
+            "ACTIVOS CORRIENTES": ["TARJETAS POR ACREDITAR 24 HS"]
+            , "Saldo Final": [0]
+        })
+        df_gSheetData = df_zeroValues
+
+    
+    # df_gSheetData.insert(0, "ACTIVOS CORRIENTES", "ECHEQS EN CARTERA")
+    # df_gSheetData = df_gSheetData.drop(columns="UEN")
+        
+
+    return df_gSheetData
+
+
+
+
+# df_Echecks = _get_df_Echecks(googleSheet_InfoKamel,"ECheq!A:C")
+# #print(df_Echecks)
+
+
+# df_pesos = _get_df_pesos(conectorMSSQL(loginSGFin))
+
+
+# df_dolar = _get_df_dolar(googleSheet_InfoKamel, "Dólar!A:E")
+# #print(df_dolar)
+
+
+# df_bancos = _get_df_bank(googleSheet_InfoKamel, "Bancos!A:F")
+
+# print(df_bancos)
+
+# df_unificado = pd.concat([df_pesos, df_dolar, df_bancos])
+
+# print(df_unificado)
+
+# conexCentral = conectorMSSQL(login)
+# conexSGFin = conectorMSSQL(loginSGFin)
+
+# df_pesos = _get_df_pesos(conexSGFin)
+# df_dolar = _get_df_dolar(googleSheet_InfoKamel, "Dólar!A:E")
+# df_bancos = _get_df_bank(googleSheet_InfoKamel, "Bancos!A:F")
+# df_cards = _get_df_cards(googleSheet_InfoKamel,"Tarjetas!A:C")
+# df_debt = _get_df_debt(conexCentral)
+# df_checks = _get_df_checks(conexSGFin)
+# df_Echecks = _get_df_Echecks(googleSheet_InfoKamel,"ECheq!A:C")
+
+# df_union = pd.concat([
+#     df_pesos
+#     , df_dolar
+#     , df_bancos
+#     , df_cards
+#     , df_debt
+#     , df_checks
+#     , df_Echecks
+# ])
+
+# # Reset index
+# df_union.reset_index(drop=True, inplace=True)
+
+# # Get "TOTAL" row
+# df_union.loc[df_union.index[-1]+1] = df_union.sum(numeric_only=True)
+
+# # Fill the NA with the word "TOTAL" to identify the row
+# df_union.fillna({"ACTIVOS CORRIENTES": "TOTAL"}, inplace=True)
+
+
+
+##########################################
+# STYLING of the dataframe
+##########################################
+
+def _estiladorVtaTitulo(
+    df:pd.DataFrame
+    , list_Col_Num=[]
+    , list_Col_Perc=[]
+    , titulo=""
+):
+    """
+This function will return a styled dataframe that must be assign to a variable.
+ARGS:
+    df: Dataframe that will be styled.
+    list_Col_Num: List of numeric columns that will be formatted with
+    zero decimals and thousand separator.
+    list_Col_Perc: List of numeric columns that will be formatted 
+    as percentage.
+    titulo: String for the table caption.
+    """
+    resultado = df.style \
+        .format("$ {0:,.0f}", subset=list_Col_Num) \
+        .format("{:,.2%}", subset=list_Col_Perc) \
+        .hide_index() \
+        .set_caption(
+            titulo
+            + " "
+            + (pd.to_datetime("today")
+            .strftime("%d/%m/%y"))
+        ) \
+        .set_properties(subset=list_Col_Num
+            , **{"text-align": "right", "width": "100px"}) \
+        .set_properties(subset=list_Col_Perc
+            , **{"text-align": "center", "width": "90px"}) \
+        .set_properties(border= "2px solid black") \
+        .set_table_styles([
+            {"selector": "caption", 
+                "props": [
+                    ("font-size", "20px")
+                    ,("text-align", "center")
+                ]
+            }
+            , {"selector": "th", 
+                "props": [
+                    ("text-align", "center")
+                    ,("background-color","black")
+                    ,("color","white")
+                    ,("font-size", "14px")
+                ]
+            }
+        ]) \
+        .apply(lambda x: ["background-color: black" if x.name == df.index[-1] 
+            else "" for i in x]
+            , axis=1) \
+        .apply(lambda x: ["color: white" if x.name == df.index[-1]
+            else "" for i in x]
+            , axis=1) \
+        .apply(lambda x: ["font-size: 15px" if x.name == df.index[-1]
+            else "" for i in x]
+            , axis=1)
+
+    return resultado
+
+
+
+
+##########################################
+# PRINTING dataframe as an image
+##########################################
+
+# This will print the df with a unique name and will erase the old image 
+# everytime the script is run
+
+def _df_to_image(df, ubicacion, nombre):
+    """
+    Esta función usa las biblioteca "dataframe_Image as dfi" y "os" para 
+    generar un archivo .png de un dataframe. Si el archivo ya existe, este será
+    reemplazado por el nuevo archivo.
+
+    Args:
+        df: dataframe a convertir
+        ubicacion: ubicacion local donde se quiere grabar el archivo
+         nombre: nombre del archivo incluyendo extensión .png (ej: "hello.png")
+
+    """
+        
+    if os.path.exists(ubicacion+nombre):
+        os.remove(ubicacion+nombre)
+        dfi.export(df, ubicacion+nombre)
+    else:
+        dfi.export(df, ubicacion+nombre)
+
+
+
+##########################################
+# FUNCTION TO RUN MODULE
+##########################################
+
+def activosCorrientes():
+    """
+    This function will generate an image report of current assets
+    """
+
+    # Timer
+    tiempoInicio = pd.to_datetime("today")
+
+    # Connections to DBs
+    conexCentral = conectorMSSQL(login)
+    conexSGFin = conectorMSSQL(loginSGFin)
+
+    # Get DFs
+    df_pesos = _get_df_pesos(conexSGFin)
+    df_dolar = _get_df_dolar(googleSheet_InfoKamel, "Dólar!A:E")
+    df_bancos = _get_df_bank(googleSheet_InfoKamel, "Bancos!A:F")
+    df_cards = _get_df_cards(googleSheet_InfoKamel,"Tarjetas!A:C")
+    df_debt = _get_df_debt(conexCentral)
+    df_checks = _get_df_checks(conexSGFin)
+    df_Echecks = _get_df_Echecks(googleSheet_InfoKamel,"ECheq!A:C")
+
+    # Concatenate the DFs
+    df_union = pd.concat([
+        df_pesos
+        , df_dolar
+        , df_bancos
+        , df_cards
+        , df_debt
+        , df_checks
+        , df_Echecks
+    ])
+
+    # Reset index
+    df_union.reset_index(drop=True, inplace=True)
+
+    # Get "TOTAL" row
+    df_union.loc[df_union.index[-1]+1] = df_union.sum(numeric_only=True)
+
+    # Fill the NA with the word "TOTAL" to identify the row
+    df_union.fillna({"ACTIVOS CORRIENTES": "TOTAL"}, inplace=True)
+
+    # Styling dataframe
+    df_union_Estilo = _estiladorVtaTitulo(
+        df_union
+        , list_Col_Num=["Saldo Final"]
+        , titulo= "ACTIVOS CORRIENTES"
+    )
+
+    # Files location
+    ubicacion = str(pathlib.Path(__file__).parent)+"\\"
+
+    # Get image of DF
+    _df_to_image(df_union_Estilo, ubicacion, "activosCorrientes.png")
+
+
+    # Timer
+    tiempoFinal = pd.to_datetime("today")
+    logger.info(
+        "Info Cheques Saldos"
+        + "\nTiempo de Ejecucion Total: "
+        + str(tiempoFinal-tiempoInicio)
+    )
+
+
+
+if __name__ == "__main__":
+    activosCorrientes()
