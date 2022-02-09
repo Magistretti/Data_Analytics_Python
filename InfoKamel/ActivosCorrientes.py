@@ -748,12 +748,15 @@ def activosCorrientes():
     # Reset index
     df_union.reset_index(drop=True, inplace=True)
 
+    # Infer data types to avoid sum error
+    df_union = df_union.convert_dtypes()
+    
     # Get "TOTAL" row
     df_union.loc[df_union.index[-1]+1] = df_union.sum(numeric_only=True)
 
     # Fill the NA with the word "TOTAL" to identify the row
     df_union.fillna({"ACTIVOS CORRIENTES": "TOTAL"}, inplace=True)
-
+    
     # Styling dataframe
     df_union_Estilo = _estiladorVtaTitulo(
         df_union
