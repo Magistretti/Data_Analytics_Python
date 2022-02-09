@@ -44,7 +44,7 @@ from InfoKamel.ChequesSaldosSGFin import chequesSaldos
 from InfoKamel.DeudaComercial import condicionDeudores
 from InfoKamel.BancosSaldos import bancosSaldos
 from InfoKamel.UsosSGFin import usos_SGFin
-
+from InfoKamel.ActivosCorrientes import activosCorrientes
 
 
 
@@ -722,6 +722,7 @@ def envio_reporte_cheques(context):
 # bancosSaldos
 # condicionDeudores
 # usos_SGFin
+# activosCorrientes
 
 
 def envio_reporte_CFO(context):
@@ -773,6 +774,15 @@ def envio_reporte_CFO(context):
         )
         logger.error("Error al resetear Usos_SGFin", exc_info=1)
 
+    try:
+        activosCorrientes()
+        logger.info("Info activosCorrientes reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info activosCorrientes"
+        )
+        logger.error("Error al resetear activosCorrientes", exc_info=1)
+
 
     fechahoy = dt.datetime.now().strftime("%d/%m/%y")
 
@@ -814,6 +824,12 @@ def envio_reporte_CFO(context):
         chat_id
         , open(find("Usos_SGFin.png", ubic), "rb")
         , "Usos_SGFin.png"
+    )
+
+    context.bot.send_photo(
+        chat_id
+        , open(find("activosCorrientes.png", ubic), "rb")
+        , "activosCorrientes.png"
     )
 
     context.bot.send_photo(
