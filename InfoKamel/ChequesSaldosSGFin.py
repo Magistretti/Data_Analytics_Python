@@ -378,7 +378,7 @@ def chequesSaldos():
     # Files location
     ubicacion = str(pathlib.Path(__file__).parent)+"\\"
 
-    # Get image of df_arqueos_Estilo
+    # Get image of df
     _df_to_image(df_chequesConEcheq_Estilo, ubicacion, "ChequesSaldos.png")
 
 
