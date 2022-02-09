@@ -60,11 +60,6 @@ def _get_df_pesos(conexSGFin):
 
 
 
-# df = _get_df_pesos(conectorMSSQL(loginSGFin))
-
-# print(df)
-
-
 
 
 ####################################################################
@@ -195,13 +190,6 @@ def _get_df_dolar(spreadsheetID, range):
 
 
 
-# df = _get_df_dolar(googleSheet_InfoKamel, "Dólar!A:E")
-
-# df_dolar = df[["Dólares Pesificados"]].loc[df.index[-1]]
-
-# print(df_dolar)
-
-
 
 ####################################################################
 # Get state of banks in a df from a Google Sheet
@@ -321,10 +309,6 @@ def _get_df_bank(spreadsheetID, range):
     return df_gSheetData
 
 
-
-# df = _get_df_bank(googleSheet_InfoKamel, "Bancos!A:F")
-
-# print(df)
 
 
 ####################################################################
@@ -628,57 +612,6 @@ def _get_df_cards(spreadsheetID, range):
 
     return df_gSheetData
 
-
-
-
-# df_Echecks = _get_df_Echecks(googleSheet_InfoKamel,"ECheq!A:C")
-# #print(df_Echecks)
-
-
-# df_pesos = _get_df_pesos(conectorMSSQL(loginSGFin))
-
-
-# df_dolar = _get_df_dolar(googleSheet_InfoKamel, "Dólar!A:E")
-# #print(df_dolar)
-
-
-# df_bancos = _get_df_bank(googleSheet_InfoKamel, "Bancos!A:F")
-
-# print(df_bancos)
-
-# df_unificado = pd.concat([df_pesos, df_dolar, df_bancos])
-
-# print(df_unificado)
-
-# conexCentral = conectorMSSQL(login)
-# conexSGFin = conectorMSSQL(loginSGFin)
-
-# df_pesos = _get_df_pesos(conexSGFin)
-# df_dolar = _get_df_dolar(googleSheet_InfoKamel, "Dólar!A:E")
-# df_bancos = _get_df_bank(googleSheet_InfoKamel, "Bancos!A:F")
-# df_cards = _get_df_cards(googleSheet_InfoKamel,"Tarjetas!A:C")
-# df_debt = _get_df_debt(conexCentral)
-# df_checks = _get_df_checks(conexSGFin)
-# df_Echecks = _get_df_Echecks(googleSheet_InfoKamel,"ECheq!A:C")
-
-# df_union = pd.concat([
-#     df_pesos
-#     , df_dolar
-#     , df_bancos
-#     , df_cards
-#     , df_debt
-#     , df_checks
-#     , df_Echecks
-# ])
-
-# # Reset index
-# df_union.reset_index(drop=True, inplace=True)
-
-# # Get "TOTAL" row
-# df_union.loc[df_union.index[-1]+1] = df_union.sum(numeric_only=True)
-
-# # Fill the NA with the word "TOTAL" to identify the row
-# df_union.fillna({"ACTIVOS CORRIENTES": "TOTAL"}, inplace=True)
 
 
 
