@@ -115,36 +115,33 @@ DATEFMT = "%Y-%m-%d %H:%M:%S"
 if not os.path.exists(ubic + "log"):
     os.mkdir(ubic + "log")
 
-# set up logging to file
-logging.basicConfig(level=logging.INFO,
-                    format=FORMAT,
-                    datefmt=DATEFMT)
-# define a Handler which writes INFO messages to a log file
-filelog = logging.handlers.TimedRotatingFileHandler(
-    ubic + "log\\bot_activity.log"
-    , when="midnight"
-    , backupCount=5
-)
-filelog.setLevel(logging.INFO)
-# set a format
-formatter = logging.Formatter(fmt=FORMAT, datefmt=DATEFMT)
-# tell the handler to use this format
-filelog.setFormatter(formatter)
-# add the handler to the root logger
-logging.getLogger("").addHandler(filelog)
-logger = logging.getLogger(__name__)
-
-
 try:
-    logger.info("->Prueba de inicio de registro<-")
+    # set up logging to file
+    logging.basicConfig(level=logging.INFO,
+                        format=FORMAT,
+                        datefmt=DATEFMT)
+    # define a Handler which writes INFO messages to a log file
+    filelog = logging.handlers.TimedRotatingFileHandler(
+        ubic + "log\\bot_activity.log"
+        , when="midnight"
+        , backupCount=5
+    )
+    filelog.setLevel(logging.INFO)
+    # set a format
+    formatter = logging.Formatter(fmt=FORMAT, datefmt=DATEFMT)
+    # tell the handler to use this format
+    filelog.setFormatter(formatter)
+    # add the handler to the root logger
+    logging.getLogger("").addHandler(filelog)
+    logger = logging.getLogger(__name__)
 
 except:
-    logging.shutdown()
+    logfolder = find("bot_activity.log", ubic, "dir") + "\\"
     
-    loggerfile = find("bot_activity.log", ubic, "file")
     os.rename(
-        loggerfile
-        , loggerfile
+        logfolder + "bot_activity.log"
+        , logfolder 
+            + "bot_activity.log" 
             + dt.datetime.now().strftime("%Y-%m-%d_%H_%M_%S")
     )
 
