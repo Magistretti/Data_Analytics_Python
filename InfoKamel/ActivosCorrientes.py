@@ -163,30 +163,47 @@ def _get_df_dolar(spreadsheetID, range):
     # Cast "Tipo de Cambio" column as string to avoid total
     df_gSheetData = df_gSheetData.astype({"Tipo de Cambio": "string"})
 
-    # Get "TOTAL" row
-    df_gSheetData.loc[df_gSheetData.index[-1]+1] = \
-        df_gSheetData.sum(numeric_only=True)
-
     ##########################
     # Dropping "Tipo de Cambio" until someone register the data
     df_gSheetData = df_gSheetData.drop(columns=["Tipo de Cambio"])
     ##########################
 
+
+    # Prepare DF for report, use a copy to avoid spilling to df_gSheetData
+    df_stockUSD = df_gSheetData.copy()
+
+    # Get "TOTAL" row
+    df_stockUSD.loc[df_stockUSD.index[-1]+1] = \
+        df_stockUSD.sum(numeric_only=True)
     # Rename the NA
-    df_gSheetData.fillna({
+    df_stockUSD.fillna({
         "UEN":"TOTAL"
         #, "Tipo de Cambio":""
     }, inplace=True)
+    # Add column "ACTIVOS CORRIENTES"
+    df_stockUSD.insert(0, "ACTIVOS CORRIENTES", "STOCK EFECTIVO UENS DOLARES")
+    # Select useful columns
+    df_stockUSD = df_stockUSD[["ACTIVOS CORRIENTES", "Dólares Pesificados"]]
+    # Rename column "Dólares Pesificados"
+    df_stockUSD.rename(columns={"Dólares Pesificados": "Saldo Final"}
+        , inplace=True
+    )
+    # Select "TOTAL" row
+    df_stockUSD = df_stockUSD.tail(1)
 
 
-    df_gSheetData.insert(0, "ACTIVOS CORRIENTES", "STOCK EFECTIVO UENS DOLARES")
-    df_gSheetData = df_gSheetData[["ACTIVOS CORRIENTES", "Dólares Pesificados"]]
-    df_gSheetData.rename(columns={"Dólares Pesificados": "Saldo Final"}, inplace=True)
-    df_gSheetData = df_gSheetData.tail(1)
-
-
+    # Get value to subtract from df_pesos to avoid duplicated stock value in
+    # treasuries not named "SAN JOSE"
+    df_resta = df_gSheetData[df_gSheetData["UEN"] != "SAN JOSE"].copy()
     
-    return df_gSheetData
+    # Get "TOTAL" row
+    df_resta.loc[df_resta.index[-1]+1] = \
+        df_resta.sum(numeric_only=True)
+    # Select useful value at last place of column "Dólares Pesificados"
+    v_resta = df_resta.at[df_resta.index[-1], "Dólares Pesificados"]
+    
+    
+    return df_stockUSD, v_resta
 
 
 
@@ -727,13 +744,18 @@ def activosCorrientes():
 
     # Get DFs
     df_pesos = _get_df_pesos(conexSGFin)
-    df_dolar = _get_df_dolar(googleSheet_InfoKamel, "Dólar!A:E")
+    df_dolar, v_resta = _get_df_dolar(googleSheet_InfoKamel, "Dólar!A:E")
     df_bancos = _get_df_bank(googleSheet_InfoKamel, "Bancos!A:F")
     df_cards = _get_df_cards(googleSheet_InfoKamel,"Tarjetas!A:C")
     df_debt = _get_df_debt(conexCentral)
     df_checks = _get_df_checks(conexSGFin)
     df_Echecks = _get_df_Echecks(googleSheet_InfoKamel,"ECheq!A:C")
-
+    
+    # Remove dolars from df_pesos
+    df_pesos = df_pesos.set_index("ACTIVOS CORRIENTES")
+    df_pesos = df_pesos - v_resta
+    df_pesos = df_pesos.reset_index()
+    
     # Concatenate the DFs
     df_union = pd.concat([
         df_pesos
