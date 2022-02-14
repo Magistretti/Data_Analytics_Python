@@ -98,9 +98,9 @@ filePath_Info_Despachos_Camioneros = \
 ######//////////////######
 
 
-#########################
+##################################################
 # LOGGING MESSAGES
-#########################
+##################################################
 
 # logging.basicConfig(
 #     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -136,9 +136,9 @@ logger = logging.getLogger(__name__)
 
 
 
-#########################
+##################################################
 # FUNCTION DECORATORS
-#########################
+##################################################
 
 def restricted(func):
     """
@@ -190,9 +190,10 @@ def send_action(action):
     return decorator
 
 
-#########################
-# INLINE KEYBOARD BUTTONS
-#########################
+
+##################################################
+# INLINE KEYBOARD BUTTONS /start function
+##################################################
 
 @restricted # NOTE: Access restricted to "start" function!
 def start(update, context) -> None:
@@ -229,9 +230,50 @@ def start(update, context) -> None:
     )
 
 
-#########################
-# INLINE KEYBOARD BUTTONS ACTIONS
-#########################
+
+##################################################
+# INLINE KEYBOARD BUTTONS /resend function
+##################################################
+
+@restricted # NOTE: Access restricted to "resend" function!
+def resend(update, context) -> None:
+    # This will create inline buttons
+    keyboard = [
+        [
+            InlineKeyboardButton("Info Diario"
+                , callback_data="Info Diario")
+            , InlineKeyboardButton("Info Comercial"
+                , callback_data="Info Comercial")
+        ]
+        , [
+            InlineKeyboardButton("Info CFO"
+                , callback_data="Info CFO")
+            , InlineKeyboardButton("Info Semanal"
+                , callback_data="Info Semanal")
+        ]
+        , [
+            InlineKeyboardButton("Info Cheques"
+                , callback_data="Info Cheques")
+            , InlineKeyboardButton("Info Lapuchesky"
+                , callback_data="Info Lapuchesky")
+        ]
+        , [
+            InlineKeyboardButton("Salir"
+                , callback_data="Salir")
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    update.message.reply_text("Por favor elija una opción:"
+        , reply_markup=reply_markup
+    )
+
+
+
+##################################################
+# INLINE KEYBOARD BUTTONS ACTIONS /start
+##################################################
 
 @send_action(ChatAction.UPLOAD_PHOTO)
 def button(update, context) -> None:
@@ -242,6 +284,12 @@ def button(update, context) -> None:
     query.answer()
 
     query.edit_message_text(text=f"Opción Seleccionada: {query.data}")
+
+
+    ####################################################
+    # CallbackQuery responses for /start /informes
+    ####################################################
+
 
     # INFO DEUDAS COMERCIALES
     if query.data == "Info Deudas Comerciales":
@@ -345,6 +393,94 @@ def button(update, context) -> None:
                 , text="Algo falló, revisar consola")
             logger.error("", exc_info=1)
 
+
+    ####################################################
+    # CallbackQuery responses for /resend /reenviar
+    ####################################################
+
+    # INFO DIARIO
+    if query.data == "Info Diario":
+        try:
+            query.bot.send_message(update.effective_chat.id
+                , text="Activando Reporte Diario en 10 segundos")
+
+            context.job_queue.run_once(envio_reporte_ivo, 10)
+
+        except Exception as e:
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
+
+    # INFO COMERCIAL
+    elif query.data == "Info Comercial":
+        try:
+            query.bot.send_message(update.effective_chat.id
+                , text="Activando Reporte Comercial en 10 segundos")
+
+            context.job_queue.run_once(envio_reporte_comercial, 10)
+
+        except Exception as e:  
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
+
+    # INFO CFO
+    elif query.data == "Info CFO":
+        try:
+            query.bot.send_message(update.effective_chat.id
+                , text="Activando Reporte CFO en 10 segundos")
+
+            context.job_queue.run_once(envio_reporte_CFO, 10)
+
+        except Exception as e:  
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
+    
+    # INFO SEMANAL
+    elif query.data == "Info Semanal":
+        try:
+            query.bot.send_message(update.effective_chat.id
+                , text="Activando Reporte Semanal en 10 segundos")
+
+            context.job_queue.run_once(envio_reporte_semanal, 10)
+
+        except Exception as e:  
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
+
+    # INFO CHEQUES
+    elif query.data == "Info cheques":
+        try:
+            query.bot.send_message(update.effective_chat.id
+                , text="Activando Reporte Cheques en 10 segundos")
+
+            context.job_queue.run_once(envio_reporte_cheques, 10)
+
+        except Exception as e:  
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
+    
+    # INFO LAPUCHESKY
+    elif query.data == "Info Lapuchesky":
+        try:
+            query.bot.send_message(update.effective_chat.id
+                , text="Activando Reporte Lapuchesky en 10 segundos")
+
+            context.job_queue.run_once(envio_reporte_lapuchesky, 10)
+
+        except Exception as e:  
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
+    
+
+    ##################################################
+    # Generic CallbacksQuery Responses
+    ##################################################
+
     # EXIT OPTION
     elif query.data == "Salir":
         query.bot.send_message(update.effective_chat.id
@@ -355,9 +491,10 @@ def button(update, context) -> None:
             , text="Algo no salió bien...")
 
 
-#########################
+
+##################################################
 # HELP COMMAND ANSWER
-#########################
+##################################################
 
 def help_command(update, context) -> None:
     update.message.reply_text(
@@ -365,16 +502,27 @@ def help_command(update, context) -> None:
         +"/help o /ayuda -> Muestra esta información.\n"
         +"->Comandos Restringidos:\n"
         +"/start o /informes -> Inicia consulta.\n"
-        +"->Comandos Desarrollador:\n"
+        +"/resend o /reenviar -> Listado de informes para reenviar.\n"
+    )
+
+
+##################################################
+# HELP_DEV COMMAND ANSWER
+##################################################
+
+def help_Dev_command(update, context) -> None:
+    update.message.reply_text(
+        "->Comandos Desarrollador:\n"
         +"/set (HH:MM) -> Define horario del informe diario.\n"
         +"/unset info_diario -> Detiene envío del informe diario.\n"
         +"/forzar_envio -> Activa el informe diario en 10seg"
     )
 
 
-#########################
+
+##################################################
 # UNKNOWN COMMAND ANSWER
-#########################
+##################################################
 
 # Show a message when the bot receive an unknown command
 def unknown(update, context):
@@ -383,9 +531,10 @@ def unknown(update, context):
         +"¿Necesitas /ayuda?")
 
 
-#########################
+
+##################################################
 # "SET DAILY REPORT" COMMAND ANSWER
-#########################
+##################################################
 
 @developerOnly
 def set_envioDiario(update, context) -> None:
@@ -450,9 +599,9 @@ def unset(update, context) -> None:
             "Escribir nombre de la tarea: /unset (nombre_Tarea)")
 
 
-#########################
+##################################################
 # "FORCE DAILY REPORT" COMMAND ANSWER
-#########################
+##################################################
 
 @developerOnly
 def forzar_envio(update, context) -> None:
@@ -462,9 +611,9 @@ def forzar_envio(update, context) -> None:
 
 
 
-#########################
-# DAILY REPORT IVO
-#########################
+##################################################
+# DAILY REPORT IVO (Info_Diario)
+##################################################
 
 # Reset all reports and send them to the designated channel
 def envio_reporte_ivo(context):
@@ -587,9 +736,9 @@ def envio_reporte_ivo(context):
 
 
 
-#########################
+##################################################
 # DAILY REPORT Comercial
-#########################
+##################################################
 
 def envio_reporte_comercial(context):
 
@@ -659,9 +808,9 @@ def envio_reporte_comercial(context):
     
 
 
-#########################
+##################################################
 # DAILY REPORT Lapuchesky
-#########################
+##################################################
 
 def envio_reporte_lapuchesky(context):
 
@@ -682,9 +831,9 @@ def envio_reporte_lapuchesky(context):
     
     
 
-#########################
+##################################################
 # DAILY REPORT of Checks
-#########################
+##################################################
 
 def envio_reporte_cheques(context):
 
@@ -714,9 +863,9 @@ def envio_reporte_cheques(context):
 
 
 
-#########################
+##################################################
 # DAILY REPORT "CFO"
-#########################
+##################################################
 
 # arqueos
 # chequesSaldos
@@ -870,9 +1019,9 @@ def envio_reporte_CFO(context):
     )
 
 
-#########################
+##################################################
 # WEEKLY REPORT
-#########################
+##################################################
 
 def envio_reporte_semanal(context):
 
@@ -988,9 +1137,10 @@ def envio_reporte_semanal(context):
         )
 
 
-#########################
+
+##################################################
 # CONNECTION KEEP ALIVE
-#########################
+##################################################
 
 def keepAlive(context):
     '''
@@ -1004,9 +1154,9 @@ def keepAlive(context):
     
 
 
-#########################
+##################################################
 # MAIN FUNCTION
-#########################
+##################################################
 
 def main() -> None:
     """Run the bot."""
@@ -1019,7 +1169,12 @@ def main() -> None:
         , run_async=True))
     dispatcher.add_handler(CallbackQueryHandler(button
         , run_async=True))
+    dispatcher.add_handler(CommandHandler(["resend", "reenviar"], resend
+        , run_async=True))
     dispatcher.add_handler(CommandHandler(["help","ayuda"], help_command
+        , run_async=True))
+    dispatcher.add_handler(CommandHandler(["help_dev","ayuda_dev"]
+        , help_Dev_command
         , run_async=True))
     dispatcher.add_handler(CommandHandler(["forzar_envio"], forzar_envio))
     dispatcher.add_handler(CommandHandler(["set"], set_envioDiario))
