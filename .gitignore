@@ -4,7 +4,6 @@ test.py
 *.pyc
 *.png
 *.jpg
-Conectores.py
 errorLog*.txt
 *.log
 bot_activity.*
