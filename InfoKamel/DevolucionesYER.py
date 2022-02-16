@@ -201,11 +201,136 @@ def _get_df_GSheet(spreadsheetID, range):
     elif range == "AZ!A:E":
         df_gSheetData.fillna({"UEN": "AZCUENAGA"}, inplace=True)
 
+    # Rename col "CODPROD" to "PRODUCTO"
+    df_gSheetData.rename(columns={
+        "CODPROD": "PRODUCTO"
+        , "VOL": "VOLUMEN RV"
+    }, inplace=True)
+
+    # Make "VOLUMEN RV" a negative number
+    df_gSheetData["VOLUMEN RV"] = df_gSheetData["VOLUMEN RV"] * -1
 
     return df_gSheetData
 
 
 
-df = _get_df_GSheet(googleSheet_DevolucionesYER, "AZ!A:E")
+df_AZ = _get_df_GSheet(googleSheet_DevolucionesYER, "AZ!A:E")
+df_LM = _get_df_GSheet(googleSheet_DevolucionesYER, "LM!A:E")
+df_P1 = _get_df_GSheet(googleSheet_DevolucionesYER, "P1!A:E")
+df_P2 = _get_df_GSheet(googleSheet_DevolucionesYER, "P2!A:E")
+df_PO = _get_df_GSheet(googleSheet_DevolucionesYER, "PO!A:E")
+df_SJ = _get_df_GSheet(googleSheet_DevolucionesYER, "SJ!A:E")
 
-print(df)
+# Concat DFs
+df_dev = pd.concat([
+    df_AZ
+    , df_LM
+    , df_P1
+    , df_P2
+    , df_PO
+    , df_SJ
+], ignore_index=True)
+
+
+
+####################################################################
+# Get YER Sales into a DF from SQL
+####################################################################
+
+def _get_df_SQL(conexMSSQL):
+    
+    df = pd.read_sql(
+        """
+        /* Esta consulta permite extraer las ventas YER de la tabla EmpPromo 
+            ordenadas por UEN y por PRODUCTO */
+
+        --------------------------
+        DECLARE @FECHA date
+        SET @FECHA = getdate();
+        --------------------------
+
+
+        SELECT
+            RTRIM([UEN]) as 'UEN'
+            --,[FECHASQL]
+            , RTRIM([CODPRODUCTO]) as 'PRODUCTO'
+            , sum([VOLUMEN]) as 'VOLUMEN VTA'
+
+        FROM [Rumaos].[dbo].[EmpPromo]
+        WHERE UEN IN (
+            'AZCUENAGA'
+            ,'LAMADRID'
+            ,'PERDRIEL'
+            ,'PERDRIEL2'
+            ,'PUENTE OLIVE'
+            ,'SAN JOSE'
+        )
+            AND CODPROMO IN (
+                '1','2','4','5','7','8','9','10','11','12','14'
+            )
+            AND CODPRODUCTO <> 'GNC'
+            AND FECHASQL > EOMONTH(@FECHA, -1) --Último día mes anterior
+            AND FECHASQL <= EOMONTH(@FECHA) --Último día mes actual
+
+        GROUP BY UEN, CODPRODUCTO
+        --ORDER BY UEN, CODPRODUCTO
+
+        UNION ALL
+
+        SELECT
+            RTRIM([UEN]) as 'UEN'
+            , 'SUBTOTAL' as 'PRODUCTO'
+            , sum([VOLUMEN]) as VOLUMEN
+
+        FROM [Rumaos].[dbo].[EmpPromo]
+        WHERE UEN IN (
+            'AZCUENAGA'
+            ,'LAMADRID'
+            ,'PERDRIEL'
+            ,'PERDRIEL2'
+            ,'PUENTE OLIVE'
+            ,'SAN JOSE'
+        )
+            AND CODPROMO IN (
+                '1','2','4','5','7','8','9','10','11','12','14'
+            )
+            AND CODPRODUCTO <> 'GNC'
+            AND FECHASQL > EOMONTH(@FECHA, -1) --Último día mes anterior
+            AND FECHASQL <= EOMONTH(@FECHA) --Último día mes actual
+
+        GROUP BY UEN
+        ORDER BY RTRIM(UEN), RTRIM(CODPRODUCTO)
+        """
+        , conexMSSQL
+    )
+
+    return df
+
+
+
+df_vta = _get_df_SQL(conectorMSSQL(login))
+df_vta = df_vta.convert_dtypes()
+
+df_merge = pd.merge(
+    left=df_vta
+    , right=df_dev
+    , how="left"
+    , on=["UEN", "PRODUCTO"]
+)
+
+df_merge.fillna({"VOLUMEN RV": 0}, inplace=True)
+
+df_merge = df_merge.convert_dtypes()
+
+df_merge["LITROS PEND."] = df_merge["VOLUMEN VTA"] + df_merge["VOLUMEN RV"]
+
+# Get "TOTAL" row
+df_merge.loc[df_merge.index[-1]+1] = df_merge.sum(numeric_only=True)
+
+# Fill NaNs in "UEN" and "PRODUCTO"
+df_merge.fillna({
+    "UEN": ""
+    , "PRODUCTO": "TOTAL"
+}, inplace=True)
+
+print(df_merge)
