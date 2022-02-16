@@ -93,8 +93,7 @@ def _get_df_GSheet(spreadsheetID, range):
     df_gSheetData = df_gSheetData.convert_dtypes()
     
     # Get returns of the month
-    this_month = pd.to_datetime("today").to_period("M").to_timestamp("M")
-    # this_month = (pd.to_datetime("today").to_period("M") + 1).to_timestamp("M")
+    this_month = (pd.to_datetime("today").to_period("M") - 0).to_timestamp("M")
     prev_month = (pd.to_datetime("today").to_period("M") - 1).to_timestamp("M")
 
     df_checkData = df_gSheetData[
@@ -246,7 +245,13 @@ def _get_df_SQL(conexMSSQL):
 
         --------------------------
         DECLARE @FECHA date
-        SET @FECHA = getdate();
+        SET @FECHA = getdate()
+
+        DECLARE @FinMesActual date
+        SET @FinMesActual = EOMONTH(@FECHA) --Último día mes actual
+
+        DECLARE @FinMesAnterior date
+        SET @FinMesAnterior = EOMONTH(@FECHA, -1); --Último día mes anterior
         --------------------------
 
 
@@ -256,7 +261,7 @@ def _get_df_SQL(conexMSSQL):
             , RTRIM([CODPRODUCTO]) as 'PRODUCTO'
             , sum([VOLUMEN]) as 'VOLUMEN VTA'
 
-        FROM [Rumaos].[dbo].[EmpPromo]
+        FROM [Rumaos].[dbo].[EmpPromo] WITH (NOLOCK)
         WHERE UEN IN (
             'AZCUENAGA'
             ,'LAMADRID'
@@ -269,8 +274,8 @@ def _get_df_SQL(conexMSSQL):
                 '1','2','4','5','7','8','9','10','11','12','14'
             )
             AND CODPRODUCTO <> 'GNC'
-            AND FECHASQL > EOMONTH(@FECHA, -1) --Último día mes anterior
-            AND FECHASQL <= EOMONTH(@FECHA) --Último día mes actual
+            AND FECHASQL > @FinMesAnterior --Último día mes anterior
+            AND FECHASQL <= @FinMesActual --Último día mes actual
 
         GROUP BY UEN, CODPRODUCTO
         --ORDER BY UEN, CODPRODUCTO
@@ -280,9 +285,9 @@ def _get_df_SQL(conexMSSQL):
         SELECT
             RTRIM([UEN]) as 'UEN'
             , 'SUBTOTAL' as 'PRODUCTO'
-            , sum([VOLUMEN]) as VOLUMEN
+            , sum([VOLUMEN]) as 'VOLUMEN VTA'
 
-        FROM [Rumaos].[dbo].[EmpPromo]
+        FROM [Rumaos].[dbo].[EmpPromo] WITH (NOLOCK)
         WHERE UEN IN (
             'AZCUENAGA'
             ,'LAMADRID'
@@ -295,8 +300,8 @@ def _get_df_SQL(conexMSSQL):
                 '1','2','4','5','7','8','9','10','11','12','14'
             )
             AND CODPRODUCTO <> 'GNC'
-            AND FECHASQL > EOMONTH(@FECHA, -1) --Último día mes anterior
-            AND FECHASQL <= EOMONTH(@FECHA) --Último día mes actual
+            AND FECHASQL > @FinMesAnterior --Último día mes anterior
+            AND FECHASQL <= @FinMesActual --Último día mes actual
 
         GROUP BY UEN
         ORDER BY RTRIM(UEN), RTRIM(CODPRODUCTO)
@@ -325,12 +330,19 @@ df_merge = df_merge.convert_dtypes()
 df_merge["LITROS PEND."] = df_merge["VOLUMEN VTA"] + df_merge["VOLUMEN RV"]
 
 # Get "TOTAL" row
-df_merge.loc[df_merge.index[-1]+1] = df_merge.sum(numeric_only=True)
+    # Filtering "SUBTOTAL" rows
+df_total = df_merge[df_merge["PRODUCTO"] == "SUBTOTAL"].copy()
+df_total.loc[df_total.index[-1]+1] = df_total.sum(numeric_only=True)
+df_total = df_total.tail(1)
 
-# Fill NaNs in "UEN" and "PRODUCTO"
-df_merge.fillna({
+    # Fill NaNs in "UEN" and "PRODUCTO"
+df_total.fillna({
     "UEN": ""
     , "PRODUCTO": "TOTAL"
 }, inplace=True)
 
-print(df_merge)
+# Concat df_merge and df_total
+df_merge_tot = pd.concat([df_merge, df_total], ignore_index=True)
+
+
+print(df_merge_tot)
