@@ -399,7 +399,7 @@ def button(update, context) -> None:
     ####################################################
 
     # INFO DIARIO
-    if query.data == "Info Diario":
+    elif query.data == "Info Diario":
         try:
             query.bot.send_message(update.effective_chat.id
                 , text="Activando Reporte Diario en 10 segundos")
