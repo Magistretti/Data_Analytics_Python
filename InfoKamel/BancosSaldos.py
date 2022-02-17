@@ -358,7 +358,7 @@ def bancosSaldos():
     df_bancos.loc[df_bancos.index[-1]+1] = df_bancos.sum(numeric_only=True)
 
     # Renaming NA in "Bancos" column to "TOTAL"
-    df_bancos.fillna({"Bancos": "TOTAL"}, inplace=True)
+    df_bancos.fillna({"Nombre": "TOTAL"}, inplace=True)
 
     # Styling of DF
     df_bancos_Estilo = _estiladorVtaTitulo(
