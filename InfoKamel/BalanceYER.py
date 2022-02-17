@@ -229,7 +229,7 @@ def _get_df_SQL_det(conexMSSQL):
 
         --------------------------
         DECLARE @FECHA date
-        SET @FECHA = getdate()
+        SET @FECHA = getdate()-2 --Reintegro de YER a 48hs de venta
 
         DECLARE @FinMesActual date
         SET @FinMesActual = EOMONTH(@FECHA) --Último día mes actual
@@ -259,7 +259,7 @@ def _get_df_SQL_det(conexMSSQL):
             )
             AND CODPRODUCTO <> 'GNC'
             AND FECHASQL > @FinMesAnterior --Último día mes anterior
-            AND FECHASQL <= @FinMesActual --Último día mes actual
+            AND FECHASQL <= @FECHA --Reintegro de YER a 48hs de venta
 
         GROUP BY UEN, CODPRODUCTO
         --ORDER BY UEN, CODPRODUCTO
@@ -285,7 +285,7 @@ def _get_df_SQL_det(conexMSSQL):
             )
             AND CODPRODUCTO <> 'GNC'
             AND FECHASQL > @FinMesAnterior --Último día mes anterior
-            AND FECHASQL <= @FinMesActual --Último día mes actual
+            AND FECHASQL <= @FECHA --Reintegro de YER a 48hs de venta
 
         GROUP BY UEN
         ORDER BY RTRIM(UEN), RTRIM(CODPRODUCTO)
