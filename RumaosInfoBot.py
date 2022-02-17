@@ -132,7 +132,23 @@ formatter = logging.Formatter(fmt=FORMAT, datefmt=DATEFMT)
 filelog.setFormatter(formatter)
 # add the handler to the root logger
 logging.getLogger("").addHandler(filelog)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__) # Add modules names when executed
+
+
+# Define a filter to avoid cluttering due to "KeepAlive" job
+class noKeepAlive(logging.Filter):
+    def filter(self, record):
+        # return not record.getMessage().startwith("Added")
+        if "keepAlive" in record.getMessage() \
+                and record.levelname == "INFO" \
+                and record.name == "apscheduler.executors.default":
+            return False
+        else:
+            return True
+
+# Apply filter to handlers in root to avoid modules loggers bypass
+for handler in logging.root.handlers:
+    handler.addFilter(noKeepAlive())
 
 
 
