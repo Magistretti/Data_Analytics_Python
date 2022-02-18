@@ -1227,7 +1227,7 @@ def main() -> None:
         , name="info_cheques"
     )
     updater.job_queue.run_daily(envio_reporte_CFO
-        , dt.time(18,15,0,tzinfo=argTime)
+        , dt.time(17,15,0,tzinfo=argTime)
         , days=(0, 1, 2, 3, 4)
         , name="info_CFO"
     )
