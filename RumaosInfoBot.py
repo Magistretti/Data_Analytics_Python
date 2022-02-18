@@ -11,7 +11,7 @@ ubic = str(pathlib.Path(__file__).parent)+"\\"
 from DatosTelegram import id_Autorizados, bot_token, testbot_token
 from DatosTelegram import testrumaos, rumaos_info, rumaos_info_com
 from DatosTelegram import rumaos_cheques, rumaos_info_CFO
-from DatosTelegram import lapuchesky
+from DatosTelegram import lapuchesky, rumaos_conciliaciones
 from runpy import run_path
 import datetime as dt
 import pytz
@@ -46,6 +46,7 @@ from InfoKamel.BancosSaldos import bancosSaldos
 from InfoKamel.UsosSGFin import usos_SGFin
 from InfoKamel.ActivosCorrientes import activosCorrientes
 from InfoKamel.PasivosCorrientes import pasivosCorrientes
+from InfoKamel.BalanceYER import balanceYER
 
 
 
@@ -274,6 +275,10 @@ def resend(update, context) -> None:
                 , callback_data="Info Lapuchesky")
         ]
         , [
+            InlineKeyboardButton("Info Conciliaciones"
+                , callback_data="Info Conciliaciones")
+        ]
+        , [
             InlineKeyboardButton("Salir"
                 , callback_data="Salir")
         ]
@@ -486,6 +491,19 @@ def button(update, context) -> None:
                 , text="Activando Reporte Lapuchesky en 10 segundos")
 
             context.job_queue.run_once(envio_reporte_lapuchesky, 10)
+
+        except Exception as e:  
+            query.bot.send_message(update.effective_chat.id
+                , text="Algo falló, revisar consola")
+            logger.error("", exc_info=1)
+    
+    # INFO CONCILIACIONES
+    elif query.data == "Info Conciliaciones":
+        try:
+            query.bot.send_message(update.effective_chat.id
+                , text="Activando Reporte Conciliaciones en 10 segundos")
+
+            context.job_queue.run_once(envio_reporte_conciliaciones, 10)
 
         except Exception as e:  
             query.bot.send_message(update.effective_chat.id
@@ -880,6 +898,44 @@ def envio_reporte_cheques(context):
 
 
 ##################################################
+# DAILY REPORT of conciliations
+##################################################
+
+def envio_reporte_conciliaciones(context):
+
+    logger.info("\n->Comenzando generación de informe conciliaciones<-")
+
+    try:
+        balanceYER()
+        logger.info("Info balanceYER reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info balanceYER"
+        )
+        logger.error("Error al resetear balanceYER", exc_info=1)
+
+    fechahoy = dt.datetime.now().strftime("%d/%m/%y")
+
+    context.bot.send_message(
+        chat_id=rumaos_conciliaciones
+        , text="INFORMES AUTOMÁTICOS " + fechahoy
+    )
+
+    context.bot.send_photo(
+        rumaos_conciliaciones
+        , open(find("balanceYER_Acumulado.png", ubic), "rb")
+        , "Balance YER Acumulado"
+    )
+
+    context.bot.send_photo(
+        rumaos_conciliaciones
+        , open(find("balanceYER_Actual.png", ubic), "rb")
+        , "Balance YER Mes en Curso"
+    )
+
+
+
+##################################################
 # DAILY REPORT "CFO"
 ##################################################
 
@@ -1225,6 +1281,11 @@ def main() -> None:
         , dt.time(8,0,0,tzinfo=argTime)
         , days=(0, 1, 2, 3, 4)
         , name="info_cheques"
+    )
+    updater.job_queue.run_daily(envio_reporte_conciliaciones
+        , dt.time(17,10,0,tzinfo=argTime)
+        , days=(0, 1, 2, 3, 4)
+        , name="info_conciliaciones"
     )
     updater.job_queue.run_daily(envio_reporte_CFO
         , dt.time(17,15,0,tzinfo=argTime)
