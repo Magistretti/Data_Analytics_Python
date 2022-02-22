@@ -1091,6 +1091,8 @@ def envio_reporte_CFO(context):
     )
 
 
+
+
 ##################################################
 # WEEKLY REPORT
 ##################################################
@@ -1198,14 +1200,33 @@ def envio_reporte_semanal(context):
     
     context.bot.send_photo(
             chat_id
-            , open(find("Info_Periferia_parte1.png", ubic), "rb")
+            , open(find("periferia_salonpan.png", ubic), "rb")
             , "Periferia Salón y Panadería"
         )
     
     context.bot.send_photo(
             chat_id
-            , open(find("Info_Periferia_parte2.png", ubic), "rb")
-            , "Periferia Lubriplaya y Grill"
+            , open(find("periferia_cafesandwich.png", ubic), "rb")
+            , "Periferia Cafetería y Sandwiches"
+        )
+
+    context.bot.send_photo(
+            chat_id
+            , open(find("periferia_lubriplaya.png", ubic), "rb")
+            , "Periferia Lubriplaya"
+        )
+    
+    try:
+        context.bot.send_photo(
+            chat_id
+            , open(find("periferia_grill.png", ubic), "rb")
+            , "Periferia Grill"
+        )
+    except:
+        context.bot.send_message(
+            chat_id=chat_id
+            , text="Reporte Grill no generado. Ventas Grill aún no se \
+                registran a través de módulo Servicompra"
         )
 
 
