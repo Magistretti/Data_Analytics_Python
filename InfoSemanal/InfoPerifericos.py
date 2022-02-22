@@ -39,213 +39,415 @@ def _get_SCFull(conexCentral, conexAZMil, conexPIMil):
 
     df_SC = pd.read_sql(
         """
-        -- Venta SC Sin Fulls con unidades vendidas
-        -- Se va a crear una tabla temporal para la SCProduen con el objetivo de
-        -- generar un clustered index que agilice el join entre SCEgreso y SCProduen
+        
+        /* Esto evita el mensaje de confirmación después de cada
+            ejecución permitiendo a pandas generar el df */
+        SET NOCOUNT ON 
 
-        SET NOCOUNT ON --Esto evita el mensaje de confirmación después de cada
-            -- ejecución permitiendo a pandas generar el df
+        /* Variables Fecha Dinámicas*/
+        DECLARE @ayer date
+        set @ayer = GETDATE()-1
+        DECLARE @semanaAtras date
+        set @semanaAtras = GETDATE()-8
+        DECLARE @dosSemanasAtras date
+        set @dosSemanasAtras = GETDATE()-15;
 
-        -- Si la tabla temporal existe, la borra
-        if OBJECT_ID('tempdb..#ProductosSC') is not null
-        DROP TABLE #ProductosSC
-        --GO
 
-        -- Seleccionamos solo las columnas a usar de las estaciones con SC
-        -- para generar la tabla temporal
-        select UEN, CODIGO, AGRUPACION
-        into #ProductosSC
-        from dbo.scproduen
-        where UEN IN (
-                'AZCUENAGA'
-                ,'LAMADRID'
+        /*Tabla temporal de costos con el objetivo de incluir un indice agrupado
+        para acelerar JOINs*/
+        if OBJECT_ID('tempdb..#costos') is not null
+                DROP TABLE #costos
+
+        SELECT [UEN]
+            ,[CODIGO]
+            ,[FECHASQL]
+            ,[CBrutPromPond]
+        INTO #costos
+        FROM [Rumaos].[dbo].[View_Aprox_CostoHistPromPond] WITH (NOLOCK)
+
+        --create clustered index CI_CostoHist_Uen_Fecha_Cod
+            --ON #costos (UEN Asc, FECHASQL Asc, CODIGO ASC);
+        create clustered index CI_CostoHist_Cod_Uen_Fecha
+            ON #costos (CODIGO ASC, UEN Asc, FECHASQL Asc);
+
+
+        /*Tabla temporal de descripciones de productos con el objetivo de incluir un 
+        indice agrupado para acelerar JOINs*/
+        if OBJECT_ID('tempdb..#productos') is not null
+                DROP TABLE #productos
+
+        SELECT [UEN]
+            ,[CODIGO]
+            ,[AGRUPACION]
+            ,[ENVASE]
+        INTO #productos
+        FROM [Rumaos].[dbo].scproduen WITH (NOLOCK)
+        --Azcuenaga no se incluye por venta 100% Milenium
+        WHERE UEN IN (
+            'LAMADRID'
+            ,'MERCADO 2'
+            ,'PERDRIEL'
+            ,'PERDRIEL2'
+            ,'PUENTE OLIVE'
+            ,'SAN JOSE'
+        )
+
+        create clustered index CI_Productos_Cod_Uen
+            ON #productos (CODIGO ASC, UEN ASC);
+
+
+        /*CTE*/
+        with SCEgreso_ConCosto as (
+            SELECT
+                RTRIM(SCE.UEN) as 'UEN'
+                ,SCE.FECHASQL
+                ,RTRIM(SCE.CODIGO) as 'CODIGO'
+                ,sum(SCE.CANTIDAD) as 'Sum of Cantidad'
+                ,sum(SCE.IMPORTE) as 'Sum of Importe'
+                --,sum(SCE.IMPORTE) / sum(SCE.CANTIDAD) as 'PUnit Prom'
+                ,isnull(
+                    isnull(
+                        max(c.CBrutPromPond)
+                        ,(select max(cbrutprompond) as 'cbpp'
+                            from #costos as c WITH (NOLOCK)
+                            where c.uen = sce.uen
+                                and c.codigo = sce.codigo
+                                and c.FECHASQL <= sce.FECHASQL
+                            group by c.uen, c.codigo)
+                    )
+                    ,(select
+                        max((p.PRECOSTO-p.IMPINT)*1.21 + p.IMPINT) as 'cbpp'
+                        from dbo.SCProduen as p WITH (NOLOCK)
+                        where p.UEN = sce.UEN
+                            and p.CODIGO = sce.CODIGO
+                        group by p.UEN, p.CODIGO
+                    )
+                ) as 'CBrutPromPond'
+
+            FROM SCEgreso as SCE WITH (NOLOCK)
+            Left outer join #costos as c
+                on sce.UEN = c.UEN
+                    and sce.FECHASQL = c.FECHASQL
+                    and sce.CODIGO = c.CODIGO
+            WHERE SCE.UEN IN (
+                'LAMADRID'
                 ,'MERCADO 2'
                 ,'PERDRIEL'
                 ,'PERDRIEL2'
                 ,'PUENTE OLIVE'
                 ,'SAN JOSE'
             )
-        ;
+            GROUP BY SCE.UEN, SCE.FECHASQL, SCE.CODIGO
+        )
+        , SCEgreso_Margen as (
+        select
+            SCEC.UEN
+            ,SCEC.FECHASQL
+            ,SCEC.CODIGO
+            ,p.AGRUPACION
+            ,SCEC.[Sum of Cantidad] * p.ENVASE as 'Sum of Cantidad'
+            --,SCEC.[PUnit Prom]
+            ,SCEC.[Sum of Importe]
+            --,SCEC.CBrutPromPond
+            ,SCEC.CBrutPromPond * SCEC.[Sum of Cantidad] as 'Sum of Costo'
+            --,SCEC.[PUnit Prom] - SCEC.CBrutPromPond as 'PUnit Margen'
+            ,SCEC.[Sum of Importe] - (SCEC.CBrutPromPond*SCEC.[Sum of Cantidad]) as 'Margen'
 
-        -- Creamos el clustered index de CODIGO-UEN para la tabla temporal
-        create clustered index ix_Clustered1
-            ON #ProductosSC (CODIGO Asc, UEN Asc);
-
-
-        DECLARE @ayer date
-        set @ayer = GETDATE()-1
-        DECLARE @semanaAtras date
-        set @semanaAtras = GETDATE()-8
-        DECLARE @dosSemanasAtras date
-        set @dosSemanasAtras = GETDATE()-15;
-
-
-        -- Ejecutamos la consulta a la tabla SCEgreso pero hay que recordar restar
-        -- las ventas del Grill de Perdriel I que salen a través de la Agrup 'Promos'
-
-        WITH actual as( -- CTE con ventas de la semana actual
-            SELECT
-                t.UEN
-                ,sum(t.[Unid Vendidas]) as 'Unid Vend Sem Actual'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Actual'
-            FROM(
-                SELECT    
-                    RTRIM(SCEg.[UEN]) as 'UEN'
-                    ,sum(SCEg.CANTIDAD) as 'Unid Vendidas'
-                    ,sum(SCEg.IMPORTE) as 'Importe Total'
-
-                FROM [Rumaos].[dbo].[SCEgreso] as SCEg WITH (NOLOCK)
-                -- Join a la tabla temporal
-                INNER JOIN #ProductosSC as SCPr WITH (NOLOCK)
-                    ON (SCEg.UEN = SCPr.UEN AND SCEg.CODIGO = SCPr.CODIGO)
-
-                where FECHASQL > @semanaAtras
-                    AND FECHASQL <= @ayer
-                    AND SCPr.AGRUPACION NOT IN (
-                        'FILTROS'
-                        ,'PREMIOS RED MAS DIFERIDOS'
-                        ,'REGALOS O CORTESIAS'
-                        ,'VENDING2'
-                    )
-                    AND SCPr.CODIGO NOT IN (
-                        'MED'
-                        ,'TOR'
-                        ,'DOCML'
-                        ,'DOCTO'
-                        ,'MEDML'
-                        ,'MEDTO'
-                        ,'MEDMR'
-                        ,'DOCMR'
-                        ,'MEDRE'
-                        ,'DOCMIX'
-                        ,'MEDMIX'
-                        ,'MIX'
-                    )
-                GROUP BY SCEg.UEN
-
-                UNION ALL
-
-                (SELECT
-                    RTRIM(SCEg.[UEN]) as 'UEN'
-                    ,-sum([CANTIDAD]) as 'unid vend'
-                    ,-sum([IMPORTE]) as 'Importe Total'
-                FROM [Rumaos].[dbo].[SCEgreso] as SCEg WITH (NOLOCK)
-                INNER JOIN #ProductosSC as SCPr WITH (NOLOCK)
-                    ON (SCEg.UEN = SCPr.UEN AND SCEg.CODIGO = SCPr.CODIGO)
-                where SCEg.CODIGO not in (
-                    'MED'
-                    ,'TOR'
-                    ,'DOCML'
-                    ,'DOCTO'
-                    ,'MEDML'
-                    ,'MEDTO'
-                    ,'DOCMIX'
-                    ,'DOCMR'
-                    ,'MEDMIX'
-                    ,'MEDMR'
-                    ,'MEDRE'
-                    ,'MIX'
-                )
-                    AND SCPr.AGRUPACION = 'PROMOS'
-                    AND SCEg.UEN = 'PERDRIEL'
-                    AND FECHASQL > @semanaAtras
-                    AND FECHASQL <= @ayer
-                GROUP BY SCEg.UEN)
-            ) as t
-            GROUP BY UEN
-        ),
-
-        anterior as( -- CTE con ventas de la semana anterior
-            SELECT
-                t.UEN
-                ,sum(t.[Unid Vendidas]) as 'Unid Vend Sem Ant'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Ant'
-            FROM(
-                SELECT    
-                    RTRIM(SCEg.[UEN]) as 'UEN'
-                    ,sum(SCEg.CANTIDAD) as 'Unid Vendidas'
-                    ,sum(SCEg.IMPORTE) as 'Importe Total'
-
-                FROM [Rumaos].[dbo].[SCEgreso] as SCEg WITH (NOLOCK)
-                -- Join a la tabla temporal
-                INNER JOIN #ProductosSC as SCPr WITH (NOLOCK)
-                    ON (SCEg.UEN = SCPr.UEN AND SCEg.CODIGO = SCPr.CODIGO)
-
-                where FECHASQL > @dosSemanasAtras
-                    AND FECHASQL <= @semanaAtras
-                    AND SCPr.AGRUPACION NOT IN (
-                        'FILTROS'
-                        ,'PREMIOS RED MAS DIFERIDOS'
-                        ,'REGALOS O CORTESIAS'
-                        ,'VENDING2'
-                    )
-                    AND SCPr.CODIGO NOT IN (
-                        'MED'
-                        ,'TOR'
-                        ,'DOCML'
-                        ,'DOCTO'
-                        ,'MEDML'
-                        ,'MEDTO'
-                        ,'MEDMR'
-                        ,'DOCMR'
-                        ,'MEDRE'
-                        ,'DOCMIX'
-                        ,'MEDMIX'
-                        ,'MIX'
-                    )
-                GROUP BY SCEg.UEN
-
-                UNION ALL
-
-                (SELECT
-                    RTRIM(SCEg.[UEN]) as 'UEN'
-                    ,-sum([CANTIDAD]) as 'unid vend'
-                    ,-sum([IMPORTE]) as 'Importe Total'
-                FROM [Rumaos].[dbo].[SCEgreso] as SCEg WITH (NOLOCK)
-                INNER JOIN #ProductosSC as SCPr WITH (NOLOCK)
-                    ON (SCEg.UEN = SCPr.UEN AND SCEg.CODIGO = SCPr.CODIGO)
-                where SCEg.CODIGO not in (
-                    'MED'
-                    ,'TOR'
-                    ,'DOCML'
-                    ,'DOCTO'
-                    ,'MEDML'
-                    ,'MEDTO'
-                    ,'DOCMIX'
-                    ,'DOCMR'
-                    ,'MEDMIX'
-                    ,'MEDMR'
-                    ,'MEDRE'
-                    ,'MIX'
-                )
-                    AND SCPr.AGRUPACION = 'PROMOS'
-                    AND SCEg.UEN = 'PERDRIEL'
-                    AND FECHASQL > @dosSemanasAtras
-                    AND FECHASQL <= @semanaAtras
-                GROUP BY SCEg.UEN)
-            ) as t
-            GROUP BY UEN
+        from SCEgreso_ConCosto as SCEC
+        INNER JOIN #productos as p
+            on p.UEN = SCEC.UEN
+                and p.CODIGO = SCEC.CODIGO
         )
 
-        SELECT -- Resultado Final
-            actual.UEN
-            ,anterior.[Unid Vend Sem Ant]
-            ,actual.[Unid Vend Sem Actual]
-            ,anterior.[Importe Total Sem Ant]
-            ,actual.[Importe Total Sem Actual]
+        , actualSC as ( --semana actual
+            SELECT
+                cte.UEN
+                ,filtro.Negocio
+                --,cte.AGRUPACION
+                ,sum(cte.[Sum of Cantidad]) as 'Cantidad Total'
+                ,sum(cte.[Sum of Importe]) as 'Importe Total'
+                ,sum(cte.[Sum of Costo]) as 'Costo Total'
+                ,sum(cte.Margen) as 'Margen Total'
+                ,'Actual' as 'Semana'
+            FROM SCEgreso_Margen as cte
 
-        FROM actual
-        LEFT JOIN anterior
-            ON actual.UEN = anterior.UEN
-        ORDER BY UEN
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN cte.CODIGO = 'MINI04' AND cte.UEN = 'PERDRIEL' THEN 'Regalos' --hasta que se revise con Eduardo
+                    WHEN cte.AGRUPACION IN ('COCINA', 'COCINA PROMOS') THEN 'SANDWICHES'
+                    WHEN cte.AGRUPACION IN ('PANIFICADOS', 'PANIFICADOS PROMOS') THEN 'PANADERIA'
+                    WHEN cte.AGRUPACION IN ('VENDING', 'VENDING PROMOS') THEN 'CAFETERIA'
+                    WHEN cte.AGRUPACION = 'GRILL' THEN 'GRILL'
+                    WHEN cte.AGRUPACION IN ('ACCESORIOS AUTOMOTOR', 'FILTROS', 'PRODUCTOS LUBRI') THEN 'LUBRIPLAYA'
+                    WHEN cte.AGRUPACION IN ('VENDING2','REGALOS O CORTESIAS','REDMAS','RED PAGO') THEN 'Regalos'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            where cte.FECHASQL > @semanaAtras 
+                and cte.FECHASQL <= @ayer
+                and Negocio <> 'Regalos'
+            group by Negocio, UEN
+            order by Negocio, UEN OFFSET 0 ROWS
+        )
+
+        , anteriorSC as ( --semana anterior
+            SELECT
+                cte.UEN
+                ,filtro.Negocio
+                --,cte.AGRUPACION
+                ,sum(cte.[Sum of Cantidad]) as 'Cantidad Total'
+                ,sum(cte.[Sum of Importe]) as 'Importe Total'
+                ,sum(cte.[Sum of Costo]) as 'Costo Total'
+                ,sum(cte.Margen) as 'Margen Total'
+                ,'Anterior' as 'Semana'
+            FROM SCEgreso_Margen as cte
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN cte.CODIGO = 'MINI04' AND cte.UEN = 'PERDRIEL' THEN 'Regalos' --hasta que se revise con Eduardo
+                    WHEN cte.AGRUPACION IN ('COCINA', 'COCINA PROMOS') THEN 'SANDWICHES'
+                    WHEN cte.AGRUPACION IN ('PANIFICADOS', 'PANIFICADOS PROMOS') THEN 'PANADERIA'
+                    WHEN cte.AGRUPACION IN ('VENDING', 'VENDING PROMOS') THEN 'CAFETERIA'
+                    WHEN cte.AGRUPACION = 'GRILL' THEN 'GRILL'
+                    WHEN cte.AGRUPACION IN ('ACCESORIOS AUTOMOTOR', 'FILTROS', 'PRODUCTOS LUBRI') THEN 'LUBRIPLAYA'
+                    WHEN cte.AGRUPACION IN ('VENDING2','REGALOS O CORTESIAS','REDMAS','RED PAGO') THEN 'Regalos'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            where cte.FECHASQL > @dosSemanasAtras 
+                and cte.FECHASQL <= @semanaAtras
+                and Negocio <> 'Regalos'
+            group by Negocio, UEN
+            order by Negocio, UEN OFFSET 0 ROWS
+        )
+
+        ,Lubri as ( -- CTE con datos generales de lubri
+
+        SELECT 
+            RTRIM(lub.[UEN]) as 'UEN'
+            , CAST(lub.FECHASQL as date) as 'FECHASQL'
+            , 'LUBRIPLAYA' as 'Negocio'
+            , sum(-lub.[CANTIDAD]) as 'Cantidad Total'
+            , sum(lub.[IMPORTE]) as 'Importe Total'
+            , sum(-lub.[CANTIDAD] * cost.PRECOSTO * 1.21) as 'Costo Total'
+            , sum(lub.[IMPORTE]) - sum(-lub.[CANTIDAD] * cost.PRECOSTO * 1.21) as 'Margen Total'
+
+        FROM [Rumaos].[dbo].[VMovDet] as lub WITH (NOLOCK)
+        Left outer JOIN dbo.PLPRODUC as cost WITH (NOLOCK)
+            on lub.UEN = cost.UEN
+                AND lub.CODPRODUCTO = cost.CODIGO
+
+        WHERE lub.IMPORTE > '0'
+            AND (
+                    cost.AGRUPACION IN (
+                        'LUBRICANTES'
+                        , 'LUBRICENTRO'
+                        , 'OTROS PRODUCTOS LUBRIPLAYA'
+                    )
+                    -- Códigos de 'VARIOS' que forman parte de lubriplaya
+                    OR cost.CODIGO IN ('0001','0002','0003','0004','1190')
+                )
+
+        GROUP BY lub.UEN, lub.FECHASQL
+
+        ),
+
+        actualLubri as ( -- CTE con datos de la semana actual
+            SELECT
+                Lubri.UEN
+                , Lubri.Negocio
+                , sum(Lubri.[Cantidad Total]) as 'Cantidad Total'
+                , sum(Lubri.[Importe Total]) as 'Importe Total'
+                , sum(Lubri.[Costo Total]) as 'Costo Total'
+                , sum(Lubri.[Margen Total]) as 'Margen Total'
+                , 'Actual' as 'Semana'
+
+            FROM Lubri
+            WHERE Lubri.FECHASQL > @semanaAtras
+                AND Lubri.FECHASQL <= @ayer
+            
+            GROUP BY UEN, Negocio
+        ),
+
+        anteriorLubri as ( -- CTE con datos de la semana anterior
+            SELECT
+                Lubri.UEN
+                , Lubri.Negocio
+                , sum(Lubri.[Cantidad Total]) as 'Cantidad Total'
+                , sum(Lubri.[Importe Total]) as 'Importe Total'
+                , sum(Lubri.[Costo Total]) as 'Costo Total'
+                , sum(Lubri.[Margen Total]) as 'Margen Total'
+                , 'Anterior' as 'Semana'
+
+            FROM Lubri
+            WHERE CAST(FECHASQL as date) > @dosSemanasAtras
+                and CAST(FECHASQL as date) <= @semanaAtras
+            
+            GROUP BY UEN, Negocio
+        )
+
+        ,codpan as ( --Equivalencias entre "Servicompra" y "Panadería"
+            SELECT *
+            FROM (
+                VALUES
+                    ('DOCML', 12)
+                    , ('DOCMR', 10)
+                    , ('DOCMR', 11)
+                    , ('DOCTO', 14)
+                    , ('DOCTO', 15)
+                    , ('DOCTO', 16)
+            ) as temp(CODServi, CODPan)
+        )
+
+        , pancosto as (-- Costo y unidades para códigos de panadería
+            SELECT 
+                costo.[CODIGO] as 'CODServi' --Códigos módulo "Servicompra"
+                , cod.CODPan --Códigos módulo "Panadería"
+                ,MAX(costo.[DESCRIPCION]) as 'DESCRIPCION'
+                ,MAX(costo.[ENVASE]) as 'ENVASE'
+                ,MAX(costo.[PRECOSTO]) as 'PRECOSTO' --Costos por docena
+            
+            FROM [Rumaos].[dbo].[scproduen] as costo
+
+            JOIN codpan as cod
+                ON costo.CODIGO = cod.CODServi
+
+            WHERE costo.UEN IN ('AZCUENAGA','LAMADRID','PERDRIEL','PERDRIEL2','PUENTE OLIVE','LAMADRID')
+            AND costo.CODIGO in ('DOCML','DOCTO','DOCMR')
+            
+
+            GROUP BY costo.CODIGO, cod.CODPan
+            --ORDER BY costo.CODIGO, cod.CODPan
+        )
+
+        , actualPan as (--Semana actual 
+            SELECT
+                RTRIM(pan.[UEN]) as 'UEN'
+                ,'PANADERIA' as 'Negocio'
+                ,CAST(
+                    ROUND(sum(pan.CANTIDAD * costo.ENVASE), 0)
+                    as int) as 'Cantidad Total' --En unidades
+                ,CAST(
+                    ROUND(sum(pan.CANTIDAD * pan.precio), 0)
+                    as int) as 'Importe Total'
+                ,CAST(
+                    ROUND(sum(pan.CANTIDAD * costo.PRECOSTO * 1.21), 0)
+                    as int) as 'Costo Total'
+                ,CAST(
+                    ROUND(sum(pan.CANTIDAD * (pan.precio - (costo.PRECOSTO * 1.21))), 0)
+                    as int) as 'Margen Total'
+                ,'Actual' as 'Semana'
+
+            FROM [Rumaos].[dbo].[PanSalDe] as pan
+
+            INNER JOIN dbo.PanSalGe as filtro
+                ON (pan.UEN = filtro.UEN AND pan.NROCOMP = filtro.NROCOMP)
+            INNER JOIN pancosto as costo
+                ON pan.CODIGO = costo.CODPan
+
+            WHERE pan.fechasql > @semanaAtras
+                        and pan.fechasql <= @ayer
+                        and filtro.NROCLIENTE = '30'
+                        and pan.PRECIO > '0'
+
+            GROUP BY pan.UEN
+        )
+
+        , anteriorPan as (--Semana actual 
+            SELECT
+                RTRIM(pan.[UEN]) as 'UEN'
+                ,'PANADERIA' as 'Negocio'
+                ,CAST(
+                    ROUND(sum(pan.CANTIDAD * costo.ENVASE), 0)
+                    as int) as 'Cantidad Total' --En unidades
+                ,CAST(
+                    ROUND(sum(pan.CANTIDAD * pan.precio), 0)
+                    as int) as 'Importe Total'
+                ,CAST(
+                    ROUND(sum(pan.CANTIDAD * costo.PRECOSTO * 1.21), 0)
+                    as int) as 'Costo Total'
+                ,CAST(
+                    ROUND(sum(pan.CANTIDAD * (pan.precio - (costo.PRECOSTO * 1.21))), 0)
+                    as int) as 'Margen Total'
+                ,'Anterior' as 'Semana'
+
+            FROM [Rumaos].[dbo].[PanSalDe] as pan
+
+            INNER JOIN dbo.PanSalGe as filtro
+                ON (pan.UEN = filtro.UEN AND pan.NROCOMP = filtro.NROCOMP)
+            INNER JOIN pancosto as costo
+                ON pan.CODIGO = costo.CODPan
+
+            WHERE pan.fechasql > @dosSemanasAtras
+                        and pan.fechasql <= @semanaAtras
+                        and filtro.NROCLIENTE = '30'
+                        and pan.PRECIO > '0'
+
+            GROUP BY pan.UEN
+        )
+
+        , uniontable AS(
+            SELECT *
+            FROM actualSC
+
+            UNION ALL
+
+            SELECT *
+            FROM anteriorSC
+
+            UNION ALL
+
+            SELECT *
+            FROM actualPan
+
+            UNION ALL
+
+            SELECT *
+            FROM anteriorPan
+
+            UNION ALL
+
+            SELECT *
+            FROM actualLubri
+
+            UNION ALL
+
+            SELECT *
+            FROM anteriorLubri
+        )
+
+        SELECT
+            RTRIM(ut.UEN) as 'UEN'
+            ,ut.Negocio
+            ,sum(ut.[Cantidad Total]) as 'Cantidad Total'
+            ,sum(ut.[Importe Total]) as 'Importe Total'
+            ,sum(ut.[Costo Total]) as 'Costo Total'
+            ,sum(ut.[Margen Total]) as 'Margen Total'
+            ,ut.Semana
+
+        FROM uniontable as ut
+
+        GROUP BY ut.UEN, ut.Negocio, ut.Semana
+
+        ORDER BY Semana, Negocio, UEN
         """
         , conexCentral
     )
 
 
+    ####################################################
+
+
     df_fullAZ = pd.read_sql(
         """
-        
+        /* Extrae datos de los FULL de la base de datos MILLENIUM */
+
         DECLARE @ayer date
         set @ayer = GETDATE()-1
         DECLARE @semanaAtras date
@@ -254,50 +456,344 @@ def _get_SCFull(conexCentral, conexAZMil, conexPIMil):
         set @dosSemanasAtras = GETDATE()-15;
 
 
-        SELECT
-            actual.UEN
-            ,anterior.[Unid Vend Sem Ant]
-            ,actual.[Unid Vend Sem Actual]
-            ,anterior.[Importe Total Sem Ant]
-            ,actual.[Importe Total Sem Actual]
 
-        FROM (
-            SELECT
+        WITH pan_actual as (
+
+            -- Consulta de panificados por unidad
+            (SELECT
                 [UEN]
-                ,sum([Cantidad]) as 'Unid Vend Sem Actual'
-                ,sum([ImporteTotal]) as 'Importe Total Sem Actual'
-
+                ,filtro.Negocio
+                ,sum([Cantidad]) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Actual' as 'Semana'
             FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-            where FECHA > @semanaAtras
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @semanaAtras
                 AND FECHA <= @ayer
-                AND Rubro <> 'Panaderia'
+                AND Rubro = 'Panaderia' -- filtrando panificados por unidad
+                AND IDARTI NOT IN ('00365','00366','00335','00336')
                 
-            GROUP BY UEN
-        ) as actual
+            GROUP BY Negocio, UEN
 
-        LEFT JOIN (
+        )
+
+        UNION ALL
+
+        (-- Consulta de panificados por docena en unidades
             SELECT
                 [UEN]
-                ,sum([Cantidad]) as 'Unid Vend Sem Ant'
-                ,sum([ImporteTotal]) as 'Importe Total Sem Ant'
-
+                ,filtro.Negocio
+                ,sum([Cantidad]*12) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Actual' as 'Semana'
             FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-            where FECHA > @dosSemanasAtras
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @semanaAtras
+                AND FECHA <= @ayer
+                AND Rubro = 'Panaderia' 
+                AND IDARTI IN ('00365','00335')
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+        UNION ALL
+
+        (-- Consulta de panificados por media docena en unidades
+            SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]*6) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Actual' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @semanaAtras
+                AND FECHA <= @ayer
+                AND Rubro = 'Panaderia' 
+                AND IDARTI IN ('00366','00336')
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+        UNION ALL
+
+        (--Consulta de rubros adicionales a panadería
+            SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Actual' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @semanaAtras
+                AND FECHA <= @ayer
+                AND Rubro <> 'Panaderia' 
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+
+        )
+
+        , pan_anterior as (
+
+            -- Consulta de panificados por unidad
+            (SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Anterior' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @dosSemanasAtras
+                AND FECHA <= @semanaAtras
+                AND Rubro = 'Panaderia' -- filtrando panificados por unidad
+                AND IDARTI NOT IN ('00365','00366','00335','00336')
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+        UNION ALL
+
+        (-- Consulta de panificados por docena en unidades
+            SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]*12) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Anterior' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @dosSemanasAtras
+                AND FECHA <= @semanaAtras
+                AND Rubro = 'Panaderia'
+                AND IDARTI IN ('00365','00335')
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+        UNION ALL
+
+        (-- Consulta de panificados por media docena en unidades
+            SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]*6) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Anterior' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @dosSemanasAtras
+                AND FECHA <= @semanaAtras
+                AND Rubro = 'Panaderia'
+                AND IDARTI IN ('00366','00336')
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+        UNION ALL
+
+        (-- Consulta de rubros adicionales a panadería
+            SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Anterior' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @dosSemanasAtras
                 AND FECHA <= @semanaAtras
                 AND Rubro <> 'Panaderia'
                 
-            GROUP BY UEN
-        ) as anterior
+            GROUP BY Negocio, UEN
 
-            ON actual.UEN = anterior.UEN
+        )
+
+        )
+
+        , actual as (
+        SELECT
+                RTRIM([UEN]) as 'UEN'
+                ,Negocio
+                ,sum([Cantidad Total]) as 'Cantidad Total'
+                ,sum([Importe Total]) as 'Importe Total'
+                ,sum([Costo Total]) as 'Costo Total'
+                ,sum([Margen Total]) as 'Margen Total'
+                ,Semana
+            FROM pan_actual
+            GROUP BY UEN, Negocio, Semana
+        )
+
+        , anterior as (
+        SELECT
+                RTRIM([UEN]) as 'UEN'
+                ,Negocio
+                ,sum([Cantidad Total]) as 'Cantidad Total'
+                ,sum([Importe Total]) as 'Importe Total'
+                ,sum([Costo Total]) as 'Costo Total'
+                ,sum([Margen Total]) as 'Margen Total'
+                ,Semana
+            FROM pan_anterior
+            GROUP BY UEN, Negocio, Semana
+        )
+
+
+        Select
+            act.UEN
+            , act.Negocio
+            , act.[Cantidad Total]
+            , act.[Importe Total]
+            , act.[Costo Total]
+            , act.[Margen Total]
+            , act.Semana
+        from actual as act
+
+        UNION ALL
+
+        select 
+            ant.UEN
+            , ant.Negocio
+            , ant.[Cantidad Total]
+            , ant.[Importe Total]
+            , ant.[Costo Total]
+            , ant.[Margen Total]
+            , ant.Semana
+        from anterior as ant
+
+        order by Semana, Negocio, UEN
         """
         , conexAZMil
     )
 
 
+    ####################################################
+
+
     df_fullPI = pd.read_sql(
         """
-        
+        /* Extrae datos de los FULL de la base de datos MILLENIUM */
+
         DECLARE @ayer date
         set @ayer = GETDATE()-1
         DECLARE @semanaAtras date
@@ -306,42 +802,332 @@ def _get_SCFull(conexCentral, conexAZMil, conexPIMil):
         set @dosSemanasAtras = GETDATE()-15;
 
 
-        SELECT
-            actual.UEN
-            ,anterior.[Unid Vend Sem Ant]
-            ,actual.[Unid Vend Sem Actual]
-            ,anterior.[Importe Total Sem Ant]
-            ,actual.[Importe Total Sem Actual]
 
-        FROM (
-            SELECT
+        WITH pan_actual as (
+
+            -- Consulta de panificados por unidad
+            (SELECT
                 [UEN]
-                ,sum([Cantidad]) as 'Unid Vend Sem Actual'
-                ,sum([ImporteTotal]) as 'Importe Total Sem Actual'
-
+                ,filtro.Negocio
+                ,sum([Cantidad]) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Actual' as 'Semana'
             FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-            where FECHA > @semanaAtras
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @semanaAtras
                 AND FECHA <= @ayer
-                AND Rubro <> 'Panaderia'
+                AND Rubro = 'Panaderia' -- filtrando panificados por unidad
+                AND IDARTI NOT IN ('00365','00366','00335','00336')
                 
-            GROUP BY UEN
-        ) as actual
+            GROUP BY Negocio, UEN
 
-        LEFT JOIN (
+        )
+
+        UNION ALL
+
+        (-- Consulta de panificados por docena en unidades
             SELECT
                 [UEN]
-                ,sum([Cantidad]) as 'Unid Vend Sem Ant'
-                ,sum([ImporteTotal]) as 'Importe Total Sem Ant'
-
+                ,filtro.Negocio
+                ,sum([Cantidad]*12) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Actual' as 'Semana'
             FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-            where FECHA > @dosSemanasAtras
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @semanaAtras
+                AND FECHA <= @ayer
+                AND Rubro = 'Panaderia' 
+                AND IDARTI IN ('00365','00335')
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+        UNION ALL
+
+        (-- Consulta de panificados por media docena en unidades
+            SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]*6) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Actual' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @semanaAtras
+                AND FECHA <= @ayer
+                AND Rubro = 'Panaderia' 
+                AND IDARTI IN ('00366','00336')
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+        UNION ALL
+
+        (--Consulta de rubros adicionales a panadería
+            SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Actual' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @semanaAtras
+                AND FECHA <= @ayer
+                AND Rubro <> 'Panaderia' 
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+
+        )
+
+        , pan_anterior as (
+
+            -- Consulta de panificados por unidad
+            (SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Anterior' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @dosSemanasAtras
+                AND FECHA <= @semanaAtras
+                AND Rubro = 'Panaderia' -- filtrando panificados por unidad
+                AND IDARTI NOT IN ('00365','00366','00335','00336')
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+        UNION ALL
+
+        (-- Consulta de panificados por docena en unidades
+            SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]*12) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Anterior' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @dosSemanasAtras
+                AND FECHA <= @semanaAtras
+                AND Rubro = 'Panaderia'
+                AND IDARTI IN ('00365','00335')
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+        UNION ALL
+
+        (-- Consulta de panificados por media docena en unidades
+            SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]*6) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Anterior' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @dosSemanasAtras
+                AND FECHA <= @semanaAtras
+                AND Rubro = 'Panaderia'
+                AND IDARTI IN ('00366','00336')
+                
+            GROUP BY Negocio, UEN
+
+        )
+
+        UNION ALL
+
+        (-- Consulta de rubros adicionales a panadería
+            SELECT
+                [UEN]
+                ,filtro.Negocio
+                ,sum([Cantidad]) as 'Cantidad Total'
+                ,sum([ImporteTotal]) as 'Importe Total'
+                ,sum([CostoTotal]) as 'Costo Total'
+                ,sum([MargenBruto]) as 'Margen Total'
+                ,'Anterior' as 'Semana'
+            FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN Rubro = 'Comidas Frias' AND Familia = 'Sandwiches' THEN 'SANDWICHES'
+                    WHEN Rubro = 'Panaderia' THEN 'PANADERIA'
+                    WHEN Rubro = 'Cafeteria' THEN 'CAFETERIA'
+                    WHEN Rubro IN ('Accesorios Automotor', 'Lubricantes') THEN 'LUBRIPLAYA'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            WHERE FECHA > @dosSemanasAtras
                 AND FECHA <= @semanaAtras
                 AND Rubro <> 'Panaderia'
                 
-            GROUP BY UEN
-        ) as anterior
+            GROUP BY Negocio, UEN
 
-            ON actual.UEN = anterior.UEN
+        )
+
+        )
+
+        , actual as (
+        SELECT
+                RTRIM([UEN]) as 'UEN'
+                ,Negocio
+                ,sum([Cantidad Total]) as 'Cantidad Total'
+                ,sum([Importe Total]) as 'Importe Total'
+                ,sum([Costo Total]) as 'Costo Total'
+                ,sum([Margen Total]) as 'Margen Total'
+                ,Semana
+            FROM pan_actual
+            GROUP BY UEN, Negocio, Semana
+        )
+
+        , anterior as (
+        SELECT
+                RTRIM([UEN]) as 'UEN'
+                ,Negocio
+                ,sum([Cantidad Total]) as 'Cantidad Total'
+                ,sum([Importe Total]) as 'Importe Total'
+                ,sum([Costo Total]) as 'Costo Total'
+                ,sum([Margen Total]) as 'Margen Total'
+                ,Semana
+            FROM pan_anterior
+            GROUP BY UEN, Negocio, Semana
+        )
+
+
+        Select
+            act.UEN
+            , act.Negocio
+            , act.[Cantidad Total]
+            , act.[Importe Total]
+            , act.[Costo Total]
+            , act.[Margen Total]
+            , act.Semana
+        from actual as act
+
+        UNION ALL
+
+        select 
+            ant.UEN
+            , ant.Negocio
+            , ant.[Cantidad Total]
+            , ant.[Importe Total]
+            , ant.[Costo Total]
+            , ant.[Margen Total]
+            , ant.Semana
+        from anterior as ant
+
+        order by Semana, Negocio, UEN
         """
         , conexPIMil
     )
@@ -355,959 +1141,31 @@ def _get_SCFull(conexCentral, conexAZMil, conexPIMil):
 
     # Concat, group by UEN (sum) and sort by UEN
     df_SCFull = pd.concat([df_SC, df_fullAZ, df_fullPI])
-    df_SCFull = df_SCFull.groupby("UEN", as_index=False).sum()
-    df_SCFull = df_SCFull.sort_values(by="UEN")
+    df_SCFull = df_SCFull.groupby(["UEN","Negocio","Semana"], as_index=False).sum()
+    df_SCFull = df_SCFull.sort_values(by=["Semana","Negocio","UEN"])
 
-    # Creating Total Row
-    _temp_tot = df_SCFull.drop(columns=["UEN"]).sum()
-    _temp_tot["UEN"] = "TOTAL"
+    # # Creating Total Row
+    # _temp_tot = df_SCFull.drop(columns=["UEN"]).sum()
+    # _temp_tot["UEN"] = "TOTAL"
 
-    # Appending Total Row
-    df_SCFull = df_SCFull.append(_temp_tot, ignore_index=True)
+    # # Appending Total Row
+    # df_SCFull = df_SCFull.append(_temp_tot, ignore_index=True)
 
-    # Create columns "Var % Cantidad"
-    df_SCFull["Var % Cantidad"] = \
-        df_SCFull["Unid Vend Sem Actual"] / df_SCFull["Unid Vend Sem Ant"] -1
+    # # Create columns "Var % Cantidad"
+    # df_SCFull["Var % Cantidad"] = \
+    #     df_SCFull["Unid Vend Sem Actual"] / df_SCFull["Unid Vend Sem Ant"] -1
 
-    # Create columns "Var % Importe"
-    df_SCFull["Var % Importe"] = (
-        df_SCFull["Importe Total Sem Actual"] 
-        / df_SCFull["Importe Total Sem Ant"] 
-        -1
-    )
+    # # Create columns "Var % Importe"
+    # df_SCFull["Var % Importe"] = (
+    #     df_SCFull["Importe Total Sem Actual"] 
+    #     / df_SCFull["Importe Total Sem Ant"] 
+    #     -1
+    # )
 
     # print(df_SCFull)
 
     return df_SCFull
 
-
-##########################################################
-# Get dataframes of bakery sales of "Servicompras" and "FULLs"
-##########################################################
-
-def _get_pan(conexCentral, conexAZMil, conexPIMil):
-    """
-    df of bakery sales of actual and previous week
-    """
-
-    df_panSC = pd.read_sql(
-        """
-        -- Importe Total y total de docenas vendidas de panadería SGES
-
-
-        DECLARE @ayer date
-        set @ayer = GETDATE()-1
-        DECLARE @semanaAtras date
-        set @semanaAtras = GETDATE()-8
-        DECLARE @dosSemanasAtras date
-        set @dosSemanasAtras = GETDATE()-15;
-
-
-        WITH actual as ( -- CTE con ventas de la semana actual
-            SELECT
-                RTRIM(t.UEN) as 'UEN'
-                ,sum(t.[Doc Vendidas]) as 'Doc Vend Sem Actual'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Actual'
-            FROM(
-                SELECT -- Facturas módulo panadería medidas en docenas
-                    pan.[UEN]
-                    ,ROUND(sum(pan.CANTIDAD), 0) as 'Doc Vendidas'
-                    ,sum(pan.cantidad * pan.precio) as 'Importe Total'
-
-                FROM [Rumaos].[dbo].[PanSalDe] as pan
-                INNER JOIN dbo.PanSalGe as filtro
-                    ON (pan.UEN = filtro.UEN AND pan.NROCOMP = filtro.NROCOMP)
-                where pan.fechasql > @semanaAtras
-                    and pan.fechasql <= @ayer
-                    and filtro.NROCLIENTE = '30'
-                    and pan.PRECIO > '0'
-
-                group by pan.UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por unidad
-                    [UEN]
-                    ,ROUND(sum(CANTIDAD)/12, 0) as 'Doc Vendidas'
-                    ,sum(importe) as 'Importe Total'
-        
-                FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-                where fechasql > @semanaAtras
-                    and fechasql <= @ayer
-                AND UEN IN (
-                    'AZCUENAGA'
-                    ,'LAMADRID'
-                    ,'PERDRIEL'
-                    ,'PERDRIEL2'
-                    ,'PUENTE OLIVE'
-                    ,'SAN JOSE'
-                )
-                AND AGRUPACION IN (
-                    'PANIFICADOS'
-                    ,'PROMOS'
-                )
-                AND CODIGO IN (
-                    'MED'
-                    ,'TOR'
-                    ,'MEDRE'
-                )
-                group by UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por media docena
-                    [UEN]
-                    ,ROUND(sum(CANTIDAD)/2, 0) as 'Doc Vendidas'
-                    ,sum(importe) as 'Importe Total'
-        
-                FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-                where fechasql > @semanaAtras
-                    and fechasql <= @ayer
-                AND UEN IN (
-                    'AZCUENAGA'
-                    ,'LAMADRID'
-                    ,'PERDRIEL'
-                    ,'PERDRIEL2'
-                    ,'PUENTE OLIVE'
-                    ,'SAN JOSE'
-                )
-                AND AGRUPACION IN (
-                    'PANIFICADOS'
-                    ,'PROMOS'
-                )
-                AND CODIGO IN (
-                    'MEDML'
-                    ,'MEDTO'
-                    ,'MEDMR'
-                    ,'MEDMIX'
-                )
-                group by UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por docena
-                    [UEN]
-                    ,sum(CANTIDAD) as 'Doc Vendidas'
-                    ,sum(importe) as 'Importe Total'
-        
-                FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-                where fechasql > @semanaAtras
-                    and fechasql <= @ayer
-                AND UEN IN (
-                    'AZCUENAGA'
-                    ,'LAMADRID'
-                    ,'PERDRIEL'
-                    ,'PERDRIEL2'
-                    ,'PUENTE OLIVE'
-                    ,'SAN JOSE'
-                )
-                AND AGRUPACION IN (
-                    'PANIFICADOS'
-                    ,'PROMOS'
-                )
-                AND CODIGO IN (
-                    'DOCML'
-                    ,'DOCTO'
-                    ,'DOCMR'
-                    ,'DOCMIX'
-                    ,'MIX'
-                )
-                group by UEN
-            ) as t
-            GROUP BY UEN
-        ),
-
-        anterior as ( -- CTE con ventas de la semana anterior
-            SELECT
-                RTRIM(t.UEN) as 'UEN'
-                ,sum(t.[Doc Vendidas]) as 'Doc Vend Sem Ant'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Ant'
-            FROM(
-                SELECT -- Facturas módulo panadería medidas en docenas
-                    pan.[UEN]
-                    ,ROUND(sum(pan.CANTIDAD), 0) as 'Doc Vendidas'
-                    ,sum(pan.cantidad * pan.precio) as 'Importe Total'
-
-                FROM [Rumaos].[dbo].[PanSalDe] as pan
-                INNER JOIN dbo.PanSalGe as filtro
-                    ON (pan.UEN = filtro.UEN AND pan.NROCOMP = filtro.NROCOMP)
-                where pan.fechasql > @dosSemanasAtras
-                    and pan.fechasql <= @semanaAtras
-                    and filtro.NROCLIENTE = '30'
-                    and pan.PRECIO > '0'
-
-                group by pan.UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por unidad
-                    [UEN]
-                    ,ROUND(sum(CANTIDAD)/12, 0) as 'Doc Vendidas'
-                    ,sum(importe) as 'Importe Total'
-        
-                FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-                where fechasql > @dosSemanasAtras
-                    and fechasql <= @semanaAtras
-                AND UEN IN (
-                    'AZCUENAGA'
-                    ,'LAMADRID'
-                    ,'PERDRIEL'
-                    ,'PERDRIEL2'
-                    ,'PUENTE OLIVE'
-                    ,'SAN JOSE'
-                )
-                AND AGRUPACION IN (
-                    'PANIFICADOS'
-                    ,'PROMOS'
-                )
-                AND CODIGO IN (
-                    'MED'
-                    ,'TOR'
-                    ,'MEDRE'
-                )
-                group by UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por media docena
-                    [UEN]
-                    ,ROUND(sum(CANTIDAD)/2, 0) as 'Doc Vendidas'
-                    ,sum(importe) as 'Importe Total'
-        
-                FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-                where fechasql > @dosSemanasAtras
-                    and fechasql <= @semanaAtras
-                AND UEN IN (
-                    'AZCUENAGA'
-                    ,'LAMADRID'
-                    ,'PERDRIEL'
-                    ,'PERDRIEL2'
-                    ,'PUENTE OLIVE'
-                    ,'SAN JOSE'
-                )
-                AND AGRUPACION IN (
-                    'PANIFICADOS'
-                    ,'PROMOS'
-                )
-                AND CODIGO IN (
-                    'MEDML'
-                    ,'MEDTO'
-                    ,'MEDMR'
-                    ,'MEDMIX'
-                )
-                group by UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por docena
-                    [UEN]
-                    ,sum(CANTIDAD) as 'Doc Vendidas'
-                    ,sum(importe) as 'Importe Total'
-        
-                FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-                where fechasql > @dosSemanasAtras
-                    and fechasql <= @semanaAtras
-                AND UEN IN (
-                    'AZCUENAGA'
-                    ,'LAMADRID'
-                    ,'PERDRIEL'
-                    ,'PERDRIEL2'
-                    ,'PUENTE OLIVE'
-                    ,'SAN JOSE'
-                )
-                AND AGRUPACION IN (
-                    'PANIFICADOS'
-                    ,'PROMOS'
-                )
-                AND CODIGO IN (
-                    'DOCML'
-                    ,'DOCTO'
-                    ,'DOCMR'
-                    ,'DOCMIX'
-                    ,'MIX'
-                )
-                group by UEN
-            ) as t
-            GROUP BY UEN
-        )
-
-        SELECT -- Resultado final
-            actual.UEN
-            ,anterior.[Doc Vend Sem Ant]
-            ,actual.[Doc Vend Sem Actual]
-            ,anterior.[Importe Total Sem Ant]
-            ,actual.[Importe Total Sem Actual]
-
-        FROM actual
-        LEFT JOIN anterior
-            ON actual.UEN = anterior.UEN
-        ORDER BY UEN
-        """
-        , conexCentral
-    )
-
-    # print(df_panSC.info(), df_panSC)
-
-    df_panFullAZ = pd.read_sql(
-        """
-        -- Cantidad de docenas de panificados vendidos e importe total de ventas
-        -- de los full
-
-
-        DECLARE @ayer date
-        set @ayer = GETDATE()-1
-        DECLARE @semanaAtras date
-        set @semanaAtras = GETDATE()-8
-        DECLARE @dosSemanasAtras date
-        set @dosSemanasAtras = GETDATE()-15;
-
-
-        WITH actual as ( -- Definiendo la primer CTE
-            SELECT
-                t.UEN
-                ,sum(t.[Doc Vendidas]) as 'Doc Vend Sem Actual'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Actual'
-            FROM(
-                SELECT -- Todas las facturas vendidas por unidad
-                    [UEN]
-                    ,ROUND(sum([Cantidad])/12, 0) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @semanaAtras
-                    AND FECHA <= @ayer
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI NOT IN (
-                        '00365' -- Facturas x12
-                        ,'00366' -- Facturas x6
-                    )
-                GROUP BY UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por media docena
-                    [UEN]
-                    ,ROUND(sum([Cantidad])/2, 0) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @semanaAtras
-                    AND FECHA <= @ayer
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI = '00366' -- Facturas x6
-                
-                GROUP BY UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por docena
-                    [UEN]
-                    ,sum([Cantidad]) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @semanaAtras
-                    AND FECHA <= @ayer
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI = '00365' -- Facturas x12
-                
-                GROUP BY UEN
-            ) as t
-            GROUP BY UEN
-        ),
-
-        anterior as ( -- Definiendo la segunda CTE
-            SELECT
-                t.UEN
-                ,sum(t.[Doc Vendidas]) as 'Doc Vend Sem Ant'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Ant'
-            FROM(
-                SELECT -- Todas las facturas vendidas por unidad
-                    [UEN]
-                    ,ROUND(sum([Cantidad])/12, 0) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @dosSemanasAtras
-                    AND FECHA <= @semanaAtras
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI NOT IN (
-                        '00365' -- Facturas x12
-                        ,'00366' -- Facturas x6
-                    )
-                GROUP BY UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por media docena
-                    [UEN]
-                    ,ROUND(sum([Cantidad])/2, 0) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @dosSemanasAtras
-                    AND FECHA <= @semanaAtras
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI = '00366' -- Facturas x6
-                
-                GROUP BY UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por docena
-                    [UEN]
-                    ,sum([Cantidad]) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @dosSemanasAtras
-                    AND FECHA <= @semanaAtras
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI = '00365' -- Facturas x12
-                
-                GROUP BY UEN
-            ) as t
-            GROUP BY UEN
-        )
-
-
-        SELECT -- Resultado final
-            actual.UEN
-            ,anterior.[Doc Vend Sem Ant]
-            ,actual.[Doc Vend Sem Actual]
-            ,anterior.[Importe Total Sem Ant]
-            ,actual.[Importe Total Sem Actual]
-
-        FROM actual
-        left join anterior
-            on actual.UEN = anterior.UEN
-        """
-        , conexAZMil
-    )
-
-    # print(df_panFullAZ.info(), df_panFullAZ)
-
-
-    df_panFullPI = pd.read_sql(
-        """
-        -- Cantidad de docenas de panificados vendidos e importe total de ventas
-        -- de los full
-
-
-        DECLARE @ayer date
-        set @ayer = GETDATE()-1
-        DECLARE @semanaAtras date
-        set @semanaAtras = GETDATE()-8
-        DECLARE @dosSemanasAtras date
-        set @dosSemanasAtras = GETDATE()-15;
-
-
-        WITH actual as ( -- Definiendo la primer CTE
-            SELECT
-                t.UEN
-                ,sum(t.[Doc Vendidas]) as 'Doc Vend Sem Actual'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Actual'
-            FROM(
-                SELECT -- Todas las facturas vendidas por unidad
-                    [UEN]
-                    ,ROUND(sum([Cantidad])/12, 0) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @semanaAtras
-                    AND FECHA <= @ayer
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI NOT IN (
-                        '00365' -- Facturas x12
-                        ,'00366' -- Facturas x6
-                    )
-                GROUP BY UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por media docena
-                    [UEN]
-                    ,ROUND(sum([Cantidad])/2, 0) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @semanaAtras
-                    AND FECHA <= @ayer
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI = '00366' -- Facturas x6
-                
-                GROUP BY UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por docena
-                    [UEN]
-                    ,sum([Cantidad]) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @semanaAtras
-                    AND FECHA <= @ayer
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI = '00365' -- Facturas x12
-                
-                GROUP BY UEN
-            ) as t
-            GROUP BY UEN
-        ),
-
-        anterior as ( -- Definiendo la segunda CTE
-            SELECT
-                t.UEN
-                ,sum(t.[Doc Vendidas]) as 'Doc Vend Sem Ant'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Ant'
-            FROM(
-                SELECT -- Todas las facturas vendidas por unidad
-                    [UEN]
-                    ,ROUND(sum([Cantidad])/12, 0) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @dosSemanasAtras
-                    AND FECHA <= @semanaAtras
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI NOT IN (
-                        '00365' -- Facturas x12
-                        ,'00366' -- Facturas x6
-                    )
-                GROUP BY UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por media docena
-                    [UEN]
-                    ,ROUND(sum([Cantidad])/2, 0) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @dosSemanasAtras
-                    AND FECHA <= @semanaAtras
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI = '00366' -- Facturas x6
-                
-                GROUP BY UEN
-
-                UNION ALL
-
-                SELECT -- Todas las facturas vendidas por docena
-                    [UEN]
-                    ,sum([Cantidad]) as 'Doc Vendidas'
-                    ,sum([ImporteTotal]) as 'Importe Total'
-
-                FROM [MILENIUM].[dbo].[View_Vta_SC_Con_Costo]
-                where FECHA > @dosSemanasAtras
-                    AND FECHA <= @semanaAtras
-                    AND Rubro = 'Panaderia'
-                    AND IDARTI = '00365' -- Facturas x12
-                
-                GROUP BY UEN
-            ) as t
-            GROUP BY UEN
-        )
-
-
-        SELECT -- Resultado final
-            actual.UEN
-            ,anterior.[Doc Vend Sem Ant]
-            ,actual.[Doc Vend Sem Actual]
-            ,anterior.[Importe Total Sem Ant]
-            ,actual.[Importe Total Sem Actual]
-
-        FROM actual
-        left join anterior
-            on actual.UEN = anterior.UEN
-        """
-        , conexPIMil
-    )
-
-    # print(df_panFullPI.info(), df_panFullPI)
-
-
-    ##########################################################
-    # Adding "FULL" data to "SGES" data
-    ##########################################################
-
-    # Concat, group by UEN (sum) and sort by UEN
-    df_panSCFull = pd.concat([df_panSC, df_panFullAZ, df_panFullPI])
-    df_panSCFull = df_panSCFull.groupby("UEN", as_index=False).sum()
-    df_panSCFull = df_panSCFull.sort_values(by="UEN")
-
-    # Creating Total Row
-    _temp_tot = df_panSCFull.drop(columns=["UEN"]).sum()
-    _temp_tot["UEN"] = "TOTAL"
-
-    # Appending Total Row
-    df_panSCFull = df_panSCFull.append(_temp_tot, ignore_index=True)
-
-    # Create columns "Var % Cantidad"
-    df_panSCFull["Var % Cantidad"] = \
-        df_panSCFull["Doc Vend Sem Actual"] / df_panSCFull["Doc Vend Sem Ant"] -1
-
-    # Create columns "Var % Importe"
-    df_panSCFull["Var % Importe"] = (
-        df_panSCFull["Importe Total Sem Actual"] 
-        / df_panSCFull["Importe Total Sem Ant"] 
-        -1
-    )
-
-    # print(df_panSC,df_panFullAZ,df_panFullPI)
-    # print(df_panSCFull)
-
-    return df_panSCFull
-
-
-
-##########################################################
-# Get dataframes of "Lubriplaya" sales
-##########################################################
-
-def _get_lubriplaya(conexCentral):
-    """
-    Sales of filters and lubes of actual week and previous week
-    """
-
-    df_lubri = pd.read_sql(
-        """
-        -- Cantidades e importes totales vendidos de Lubriplaya para 
-        -- un período determinado
-
-
-        DECLARE @ayer date
-        set @ayer = GETDATE()-1
-        DECLARE @semanaAtras date
-        set @semanaAtras = GETDATE()-8
-        DECLARE @dosSemanasAtras date
-        set @dosSemanasAtras = GETDATE()-15;
-
-
-        WITH actual as ( -- CTE con datos de la semana actual
-            SELECT
-                RTRIM(t.UEN) as 'UEN'
-                ,sum(t.[Unid Vendidas]) as 'Unid Vend Sem Actual'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Actual'
-            FROM(
-                SELECT 
-                [UEN]
-
-                ,sum([CANTIDAD]) as 'Unid Vendidas'
-
-                ,sum([IMPORTE]) as 'Importe Total'
-
-            FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-            WHERE CAST(FECHASQL as date) > @semanaAtras
-                and CAST(FECHASQL as date) <= @ayer
-                and AGRUPACION = 'FILTROS'
-                AND UEN = 'PUENTE OLIVE'
-            GROUP BY UEN
-
-            UNION ALL
-
-            SELECT 
-                [UEN]
-
-                ,sum(-[CANTIDAD]) as 'Unid Vendidas'
-
-                ,sum([IMPORTE]) as 'Importe Total'
-
-            FROM [Rumaos].[dbo].[VMovDet] WITH (NOLOCK)
-            WHERE CAST(FECHASQL as date) > @semanaAtras
-                and CAST(FECHASQL as date) <= @ayer
-                and IMPORTE > '0'
-            GROUP BY UEN
-        ) as t
-        GROUP BY UEN
-        ),
-
-        anterior as ( -- CTE con datos de la semana anterior
-            SELECT
-                RTRIM(t.UEN) as 'UEN'
-                ,sum(t.[Unid Vendidas]) as 'Unid Vend Sem Ant'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Ant'
-            FROM(
-                SELECT 
-                [UEN]
-
-                ,sum([CANTIDAD]) as 'Unid Vendidas'
-
-                ,sum([IMPORTE]) as 'Importe Total'
-
-            FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-            WHERE CAST(FECHASQL as date) > @dosSemanasAtras
-                and CAST(FECHASQL as date) <= @semanaAtras
-                and AGRUPACION = 'FILTROS'
-                AND UEN = 'PUENTE OLIVE'
-            GROUP BY UEN
-
-            UNION ALL
-
-            SELECT 
-                [UEN]
-
-                ,sum(-[CANTIDAD]) as 'Unid Vendidas'
-
-                ,sum([IMPORTE]) as 'Importe Total'
-
-            FROM [Rumaos].[dbo].[VMovDet] WITH (NOLOCK)
-            WHERE CAST(FECHASQL as date) > @dosSemanasAtras
-                and CAST(FECHASQL as date) <= @semanaAtras
-                and IMPORTE > '0'
-            GROUP BY UEN
-        ) as t
-        GROUP BY UEN
-        )
-
-
-        select
-            actual.UEN
-            ,anterior.[Unid Vend Sem Ant]
-            ,actual.[Unid Vend Sem Actual]
-            ,anterior.[Importe Total Sem Ant]
-            ,actual.[Importe Total Sem Actual]
-
-        FROM actual
-        Left join anterior
-            ON actual.UEN = anterior.UEN
-        Order by UEN
-        """
-        , conexCentral
-    )
-
-    # print(df_lubri.info(), df_lubri)
-
-
-    ##########################################################
-    # Adding Total Row and "Var %" columns
-    ##########################################################
-
-    # Creating Total Row
-    _temp_tot = df_lubri.drop(columns=["UEN"]).sum()
-    _temp_tot["UEN"] = "TOTAL"
-
-    # Appending Total Row
-    df_lubri = df_lubri.append(_temp_tot, ignore_index=True)
-
-    # Create columns "Var % Cantidad"
-    df_lubri["Var % Cantidad"] = \
-        df_lubri["Unid Vend Sem Actual"] / df_lubri["Unid Vend Sem Ant"] -1
-
-    # Create columns "Var % Importe"
-    df_lubri["Var % Importe"] = (
-        df_lubri["Importe Total Sem Actual"] 
-        / df_lubri["Importe Total Sem Ant"] 
-        -1
-    )
-
-    # print(df_lubri)
-
-    return df_lubri
-
-
-
-##########################################################
-# Get dataframes of "Grill" sales
-##########################################################
-
-def _get_grill(conexCentral):
-    """
-    Sales of Grill of actual and previous week
-    """
-
-    df_grill = pd.read_sql(
-        """
-        -- Importe total y unidades vendidas de Barrica Grill para un período determinado
-
-
-        DECLARE @ayer date
-        set @ayer = GETDATE()-1
-        DECLARE @semanaAtras date
-        set @semanaAtras = GETDATE()-8
-        DECLARE @dosSemanasAtras date
-        set @dosSemanasAtras = GETDATE()-15;
-
-
-        SELECT
-            GrillActual.UEN
-            ,GrillAnterior.[Unid Vend Sem Ant]
-            ,GrillActual.[Unid Vend Sem Actual]
-            ,GrillAnterior.[Importe Total Sem Ant]
-            ,GrillActual.[Importe Total Sem Actual]
-
-            
-        FROM(
-            SELECT
-                t.UEN
-                ,sum(t.[unid vendidas]) as 'Unid Vend Sem Actual'
-                ,sum(t.[Importe Total]) as 'Importe Total Sem Actual'
-
-            FROM(
-                SELECT
-                    BAG.UEN
-                    , subBAG.[unid vendidas]
-                    , BAG.[Importe Total]
-
-                FROM (-- Subquery para sumar importes por UEN
-                    SELECT 
-                        RTRIM(BAG.[UEN]) as 'UEN'
-                        ,sum(BAG.IMPORTE) as 'Importe Total'
-                    FROM [Rumaos].[dbo].[BAGrillDet] as BAG WITH (NOLOCK)
-                    WHERE CAST(BAG.FECHASQL as date) > @semanaAtras
-                        AND CAST(BAG.FECHASQL as date) <= @ayer
-                    group by BAG.UEN
-                ) as BAG
-
-                LEFT JOIN (-- Subquery para evitar cód '9999' durante la suma de cantidades
-                    SELECT 
-                        RTRIM(subBAG.[UEN]) as 'UEN'
-                        ,sum(subBAG.[CANTIDAD]) as 'unid vendidas'
-                    FROM [Rumaos].[dbo].[BAGrillDet] as subBAG WITH (NOLOCK)
-                    WHERE CAST(subBAG.FECHASQL as date) > @semanaAtras
-                        AND CAST(subBAG.FECHASQL as date) <= @ayer
-                        and subBAG.CODPRODUCTO <> '9999'
-                    group by subBAG.UEN
-                ) as subBAG
-            
-                    ON BAG.UEN = subBAG.UEN
-
-                UNION ALL -- Para concatenar datos de la [VIEW_VENTAS_POR_EMPLEADO]
-
-                (SELECT
-                    RTRIM([UEN]) as 'UEN'
-                    ,sum([CANTIDAD]) as 'unid vend'
-                    ,sum([IMPORTE]) as 'Importe Total'
-                FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-                where CODIGO not in (
-                    'MED'
-                    ,'TOR'
-                    ,'DOCML'
-                    ,'DOCTO'
-                    ,'MEDML'
-                    ,'MEDTO'
-                    ,'DOCMIX'
-                    ,'DOCMR'
-                    ,'MEDMIX'
-                    ,'MEDMR'
-                    ,'MEDRE'
-                    ,'MIX'
-                )
-                    AND AGRUPACION = 'PROMOS'
-                    AND UEN = 'PERDRIEL'
-                    AND CAST(FECHASQL as date) > @semanaAtras
-                    AND CAST(FECHASQL as date) <= @ayer
-
-                GROUP BY UEN)
-            ) as t
-
-        group by t.UEN
-        ) as GrillActual
-
-        JOIN (
-            SELECT
-                GrillAnterior.UEN
-                ,GrillAnterior.[Unid Vend Sem Ant]
-                ,GrillAnterior.[Importe Total Sem Ant]
-            FROM(
-                SELECT
-                    t.UEN
-                    ,sum(t.[unid vendidas]) as 'Unid Vend Sem Ant'
-                    ,sum(t.[Importe Total]) as 'Importe Total Sem Ant'
-
-                FROM(
-                    SELECT
-                        BAG.UEN
-                        , subBAG.[unid vendidas]
-                        , BAG.[Importe Total]
-
-                    FROM (-- Subquery para sumar importes por UEN
-                        SELECT 
-                            RTRIM(BAG.[UEN]) as 'UEN'
-                            ,sum(BAG.IMPORTE) as 'Importe Total'
-                        FROM [Rumaos].[dbo].[BAGrillDet] as BAG WITH (NOLOCK)
-                        WHERE CAST(BAG.FECHASQL as date) > @dosSemanasAtras
-                        AND CAST(BAG.FECHASQL as date) <= @semanaAtras
-                        group by BAG.UEN
-                    ) as BAG
-
-                    LEFT JOIN (-- Subquery para evitar cód '9999' durante la suma de cantidades
-                        SELECT 
-                            RTRIM(subBAG.[UEN]) as 'UEN'
-                            ,sum(subBAG.[CANTIDAD]) as 'unid vendidas'
-                        FROM [Rumaos].[dbo].[BAGrillDet] as subBAG WITH (NOLOCK)
-                        WHERE CAST(subBAG.FECHASQL as date) > @dosSemanasAtras
-                        AND CAST(subBAG.FECHASQL as date) <= @semanaAtras
-                            and subBAG.CODPRODUCTO <> '9999'
-                        group by subBAG.UEN
-                    ) as subBAG
-            
-                        ON BAG.UEN = subBAG.UEN
-
-                    UNION ALL -- Para concatenar datos de la [VIEW_VENTAS_POR_EMPLEADO]
-
-                    (SELECT
-                        RTRIM([UEN]) as 'UEN'
-                        ,sum([CANTIDAD]) as 'unid vend'
-                        ,sum([IMPORTE]) as 'Importe Total'
-                    FROM [Rumaos].[dbo].[VIEW_VENTAS_POR_EMPLEADO] WITH (NOLOCK)
-                    where CODIGO not in (
-                        'MED'
-                        ,'TOR'
-                        ,'DOCML'
-                        ,'DOCTO'
-                        ,'MEDML'
-                        ,'MEDTO'
-                        ,'DOCMIX'
-                        ,'DOCMR'
-                        ,'MEDMIX'
-                        ,'MEDMR'
-                        ,'MEDRE'
-                        ,'MIX'
-                    )
-                        AND AGRUPACION = 'PROMOS'
-                        AND UEN = 'PERDRIEL'
-                        AND CAST(FECHASQL as date) > @dosSemanasAtras
-                    AND CAST(FECHASQL as date) <= @semanaAtras
-                    GROUP BY UEN)
-                ) as t
-
-            group by t.UEN
-            ) as GrillAnterior
-        ) as GrillAnterior
-            ON GrillActual.UEN = GrillAnterior.UEN
-        """
-        , conexCentral
-    )
-
-    # print(df_grill.info(), df_grill)
-
-    ##########################################################
-    # Adding Total Row and "Var %" columns
-    ##########################################################
-
-    # Creating Total Row
-    _temp_tot = df_grill.drop(columns=["UEN"]).sum()
-    _temp_tot["UEN"] = "TOTAL"
-
-    # Appending Total Row
-    df_grill = df_grill.append(_temp_tot, ignore_index=True)
-
-    # Create columns "Var % Cantidad"
-    df_grill["Var % Cantidad"] = \
-        df_grill["Unid Vend Sem Actual"] / df_grill["Unid Vend Sem Ant"] -1
-
-    # Create columns "Var % Importe"
-    df_grill["Var % Importe"] = (
-        df_grill["Importe Total Sem Actual"] 
-        / df_grill["Importe Total Sem Ant"] 
-        -1
-    )
-
-    # print(df_grill)
-
-    return df_grill
 
 
 
@@ -1339,18 +1197,17 @@ ARGS:
         .format("{0:,.0f}", subset=list_Col_Num) \
         .format("$ {0:,.0f}", subset=list_Col_Din) \
         .format("{:,.2%}", subset=list_Col_Perc) \
-        .hide_index() \
         .set_caption(
             titulo
-            + "<br>"
-            + "Semana Actual "
+            + " Semana Actual "
             + ((pd.to_datetime("today")-pd.to_timedelta(7,"days"))
             .strftime("%d/%m/%y"))
             + " al "
             + ((pd.to_datetime("today")-pd.to_timedelta(1,"days"))
             .strftime("%d/%m/%y"))
         ) \
-        .set_properties(subset=list_Col_Num + list_Col_Din + list_Col_Perc
+        .set_properties(subset=list_Col_Num + list_Col_Din #+ list_Col_Perc
+        # commented list_Col_Perc due to multiindex selection
             , **{"text-align": "center", "width": "100px"}) \
         .set_properties(border= "2px solid black") \
         .set_table_styles([
@@ -1484,106 +1341,158 @@ def perifericoSemanal():
 
     # Getting DFs
     df_SCFull = _get_SCFull(conexCentral, conexAZMil, conexPIMil)
-    df_pan = _get_pan(conexCentral, conexAZMil, conexPIMil)
-    df_lubriplaya = _get_lubriplaya(conexCentral)
-    df_grill = _get_grill(conexCentral)
+
+    # Pivot DF to create a multiindex
+    df_pivot = df_SCFull.pivot(index=["Negocio", "UEN"], columns=["Semana"])
+
+    # Get DF for each group
+    df_salon = df_pivot.loc["SALON"]
+    df_pan = df_pivot.loc["PANADERIA"]
+    df_cafe = df_pivot.loc["CAFETERIA"]
+    df_sandwich = df_pivot.loc["SANDWICHES"]
+    df_lubri = df_pivot.loc["LUBRIPLAYA"]
+    
+    
+    # Total Row for each group
+    df_salon.loc["TOTAL"] = df_salon.sum(numeric_only=True)
+    df_pan.loc["TOTAL"] = df_pan.sum(numeric_only=True)
+    df_cafe.loc["TOTAL"] = df_cafe.sum(numeric_only=True)
+    df_sandwich.loc["TOTAL"] = df_sandwich.sum(numeric_only=True)
+    df_lubri.loc["TOTAL"] = df_lubri.sum(numeric_only=True)
+
+
+
+    # Use a tuple to create a column and define a new lvl 1 name for each group
+    df_salon[("Margen Total","Var %")]=(
+        (df_salon[("Margen Total","Actual")] 
+        - df_salon[("Margen Total","Anterior")])
+        / abs(df_salon[("Margen Total","Anterior")])
+    )
+    df_pan[("Margen Total","Var %")]=(
+        (df_pan[("Margen Total","Actual")] 
+        - df_pan[("Margen Total","Anterior")])
+        / abs(df_pan[("Margen Total","Anterior")])
+    )
+    df_cafe[("Margen Total","Var %")]=(
+        (df_cafe[("Margen Total","Actual")] 
+        - df_cafe[("Margen Total","Anterior")])
+        / abs(df_cafe[("Margen Total","Anterior")])
+    )
+    df_sandwich[("Margen Total","Var %")]=(
+        (df_sandwich[("Margen Total","Actual")] 
+        - df_sandwich[("Margen Total","Anterior")])
+        / abs(df_sandwich[("Margen Total","Anterior")])
+    )
+    df_lubri[("Margen Total","Var %")]=(
+        (df_lubri[("Margen Total","Actual")] 
+        - df_lubri[("Margen Total","Anterior")])
+        / abs(df_lubri[("Margen Total","Anterior")])
+    )
+    
+
+
 
     # Styling of DFs
-    df_SCFull_Estilo = _estiladorVtaTitulo(
-        df=df_SCFull
-        , list_Col_Num=[
-            "Unid Vend Sem Ant"
-            , "Unid Vend Sem Actual"
-        ]
-        , list_Col_Din=[
-            "Importe Total Sem Ant"
-            , "Importe Total Sem Actual"
-        ]
-        , list_Col_Perc=[
-            "Var % Cantidad"
-            , "Var % Importe"
-        ]
-        , titulo="Servicompras y Fulls"
+    df_salon_estilo = _estiladorVtaTitulo(
+        df_salon
+        , list_Col_Num=["Cantidad Total"]
+        , list_Col_Din=["Importe Total", "Costo Total", "Margen Total"]
+        , list_Col_Perc=[("Margen Total", "Var %")]
+        , titulo="SALÓN"
+    )
+    df_pan_estilo = _estiladorVtaTitulo(
+        df_pan
+        , list_Col_Num=["Cantidad Total"]
+        , list_Col_Din=["Importe Total", "Costo Total", "Margen Total"]
+        , list_Col_Perc=[("Margen Total", "Var %")]
+        , titulo="PANADERÍA"
+    )
+    df_cafe_estilo = _estiladorVtaTitulo(
+        df_cafe
+        , list_Col_Num=["Cantidad Total"]
+        , list_Col_Din=["Importe Total", "Costo Total", "Margen Total"]
+        , list_Col_Perc=[("Margen Total", "Var %")]
+        , titulo="CAFETERIA"
+    )
+    df_sandwich_estilo = _estiladorVtaTitulo(
+        df_sandwich
+        , list_Col_Num=["Cantidad Total"]
+        , list_Col_Din=["Importe Total", "Costo Total", "Margen Total"]
+        , list_Col_Perc=[("Margen Total", "Var %")]
+        , titulo="SANDWICHES"
+    )
+    df_lubri_estilo = _estiladorVtaTitulo(
+        df_lubri
+        , list_Col_Num=["Cantidad Total"]
+        , list_Col_Din=["Importe Total", "Costo Total", "Margen Total"]
+        , list_Col_Perc=[("Margen Total", "Var %")]
+        , titulo="LUBRIPLAYA"
     )
 
-    df_pan_Estilo = _estiladorVtaTitulo(
-        df=df_pan
-        , list_Col_Num=[
-            "Doc Vend Sem Ant"
-            , "Doc Vend Sem Actual"
-        ]
-        , list_Col_Din=[
-            "Importe Total Sem Ant"
-            , "Importe Total Sem Actual"
-        ]
-        , list_Col_Perc=[
-            "Var % Cantidad"
-            , "Var % Importe"
-        ]
-        , titulo="Panificados"
-    )
-
-    df_lubriplaya_Estilo = _estiladorVtaTitulo(
-        df=df_lubriplaya
-        , list_Col_Num=[
-            "Unid Vend Sem Ant"
-            , "Unid Vend Sem Actual"
-        ]
-        , list_Col_Din=[
-            "Importe Total Sem Ant"
-            , "Importe Total Sem Actual"
-        ]
-        , list_Col_Perc=[
-            "Var % Cantidad"
-            , "Var % Importe"
-        ]
-        , titulo="Lubriplaya"
-    )
-
-    df_grill_Estilo = _estiladorVtaTitulo(
-        df=df_grill
-        , list_Col_Num=[
-            "Unid Vend Sem Ant"
-            , "Unid Vend Sem Actual"
-        ]
-        , list_Col_Din=[
-            "Importe Total Sem Ant"
-            , "Importe Total Sem Actual"
-        ]
-        , list_Col_Perc=[
-            "Var % Cantidad"
-            , "Var % Importe"
-        ]
-        , titulo="Grill"
-    )
 
 
     # Files location
     ubicacion = str(pathlib.Path(__file__).parent)+"\\"
 
-    # Printing Images
-    _df_to_image(df_SCFull_Estilo, ubicacion, "SCFull_Sem.png")
-    _df_to_image(df_pan_Estilo, ubicacion, "Pan_Sem.png")
-    _df_to_image(df_lubriplaya_Estilo, ubicacion, "Lubriplaya_Sem.png")
-    _df_to_image(df_grill_Estilo, ubicacion, "Grill_Sem.png")
+    # # Printing Images
+    _df_to_image(df_salon_estilo, ubicacion, "periferico_salon.png")
+    _df_to_image(df_pan_estilo, ubicacion, "periferico_pan.png")
+    _df_to_image(df_cafe_estilo, ubicacion, "periferico_cafe.png")
+    _df_to_image(df_sandwich_estilo, ubicacion, "periferico_sandwich.png")
+    _df_to_image(df_lubri_estilo, ubicacion, "periferico_lubri.png")
+    
+
+
+    ######################################################################
+    # Group "GRILL" use a try except to be generated if SGES registration is 
+    # updated
+
+    try:
+        df_grill = df_pivot.loc["GRILL"]
+
+        df_grill.loc["TOTAL"] = df_grill.sum(numeric_only=True)
+
+        df_grill[("Margen Total","Var %")]=(
+            (df_grill[("Margen Total","Actual")] 
+            - df_grill[("Margen Total","Anterior")])
+            / abs(df_grill[("Margen Total","Anterior")])
+        )
+
+        df_grill_estilo = _estiladorVtaTitulo(
+            df_grill
+            , list_Col_Num=["Cantidad Total"]
+            , list_Col_Din=["Importe Total", "Costo Total", "Margen Total"]
+            , list_Col_Perc=[("Margen Total", "Var %")]
+            , titulo="GRILL"
+        )
+
+        _df_to_image(df_grill_estilo, ubicacion, "periferico_grill.png")
+
+    except:
+        logger.info("NO DATA IN 'SC AGRUP GRILL'")
+
+    ######################################################################
+
+
 
     # Merge images vertically
     listaImg1 = [
-        ubicacion + "SCFull_Sem.png"
-        , ubicacion + "Pan_Sem.png"
+        ubicacion + "periferico_salon.png"
+        , ubicacion + "periferico_pan.png"
     ]
 
     listaImg2 = [
-        ubicacion + "Lubriplaya_Sem.png"
-        , ubicacion + "Grill_Sem.png"
+        ubicacion + "periferico_cafe.png"
+        , ubicacion + "periferico_sandwich.png"
     ]
 
 
     fusionImg = _append_images(listaImg1, direction="vertical")
-    fusionImg.save(ubicacion + "Info_Periferia_parte1.png")
+    fusionImg.save(ubicacion + "periferia_salonpan.png")
 
     fusionImg2 = _append_images(listaImg2, direction="vertical")
-    fusionImg2.save(ubicacion + "Info_Periferia_parte2.png")
+    fusionImg2.save(ubicacion + "periferia_cafesandwich.png")
+
 
 
     # Timer
