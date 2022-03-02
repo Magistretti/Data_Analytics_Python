@@ -1212,7 +1212,7 @@ def envio_reporte_semanal(context):
 
     context.bot.send_photo(
             chat_id
-            , open(find("periferia_lubriplaya.png", ubic), "rb")
+            , open(find("periferico_lubri.png", ubic), "rb")
             , "Periferia Lubriplaya"
         )
     
