@@ -1515,6 +1515,7 @@ def _get_SCFull_weekly(conexCentral, conexAZMil, conexPIMil):
                         and pan.fechasql <= @ayer
                         and filtro.NROCLIENTE = '30'
                         and pan.PRECIO > '0'
+                        and pan.UEN IN ('AZCUENAGA','LAMADRID','PERDRIEL','PERDRIEL2','PUENTE OLIVE','LAMADRID')
 
             GROUP BY pan.UEN
         )
