@@ -195,8 +195,11 @@ def _get_df_dolar(spreadsheetID, range):
 
     # Get value to subtract from df_pesos to avoid duplicated stock value in
     # treasuries not named "SAN JOSE"
-    df_resta = df_gSheetData[df_gSheetData["UEN"] != "SAN JOSE"].copy()
-    
+    df_resta = df_gSheetData[
+        (df_gSheetData["UEN"] != "SAN JOSE") 
+        & (df_gSheetData["UEN"] != "CAJA SEGURIDAD")
+    ].copy()
+
     # Get "TOTAL" row
     df_resta.loc[df_resta.index[-1]+1] = \
         df_resta.sum(numeric_only=True)
