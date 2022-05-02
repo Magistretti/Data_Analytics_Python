@@ -462,9 +462,10 @@ def button(update, context) -> None:
     elif query.data == "Info Semanal":
         try:
             query.bot.send_message(update.effective_chat.id
-                , text="Activando Reporte Semanal en 10 segundos")
+                , text="Activando Reporte Periferia Semanal en 10seg y Reporte Semanal en 1min")
 
-            context.job_queue.run_once(envio_reporte_semanal, 10)
+            context.job_queue.run_once(envio_reporte_semanal, 60)
+            context.job_queue.run_once(envio_reporte_periferia_semanal, 10)
 
         except Exception as e:  
             query.bot.send_message(update.effective_chat.id
@@ -1092,9 +1093,117 @@ def envio_reporte_CFO(context):
 
 
 
+##################################################
+# WEEKLY REPORT "periferia"
+# Channel Rumaos_Info_CFO and Rumaos_Info_Comercial
+##################################################
+
+# CFO
+# perifericos (con margen)
+
+# Comercial
+# perifericos (sin margen)
+
+def envio_reporte_periferia_semanal(context):
+
+    chat_id = [rumaos_info_CFO, rumaos_info_com]
+
+    logger.info("\n->Comenzando generación de informe semanal<-")
+
+    try:
+        perifericoSemanal()
+        logger.info("Info Periferico Semanal reseteado")
+    except Exception as e:
+        context.bot.send_message(id_Autorizados[0]
+            , text="Error al resetear Info Periferico Semanal"
+        )
+        logger.error("Error al resetear Periferico Semanal", exc_info=1)
+
+
+    weekStart = (dt.date.today()-dt.timedelta(days=7)).strftime("%d/%m/%y")
+    weekEnd = (dt.date.today()-dt.timedelta(days=1)).strftime("%d/%m/%y")
+
+    # Send to both channels
+    for ids in chat_id:
+        context.bot.send_message(
+            chat_id=ids
+            , text="INFORMES AUTOMÁTICOS SEMANALES\n" 
+                + "PERÍODO "
+                + weekStart
+                + " AL "
+                + weekEnd
+        )
+
+
+    # Send to channel Rumaos_Info_CFO
+    context.bot.send_photo(
+            chat_id[0]
+            , open(find("periferia_salonpan.png", ubic), "rb")
+            , "Periferia Salón y Panadería"
+        )
+    
+    context.bot.send_photo(
+            chat_id[0]
+            , open(find("periferia_cafesandwich.png", ubic), "rb")
+            , "Periferia Cafetería y Sandwiches"
+        )
+
+    context.bot.send_photo(
+            chat_id[0]
+            , open(find("periferico_lubri.png", ubic), "rb")
+            , "Periferia Lubriplaya"
+        )
+    
+    try:
+        context.bot.send_photo(
+            chat_id[0]
+            , open(find("periferia_grill.png", ubic), "rb")
+            , "Periferia Grill"
+        )
+    except:
+        context.bot.send_message(
+            chat_id=chat_id[0]
+            , text="Reporte Grill no generado. Ventas Grill aún no se \
+                registran a través de módulo Servicompra"
+        )
+
+
+    # Send to channel Rumaos_Info_Comercial
+    context.bot.send_photo(
+            chat_id[1]
+            , open(find("periferia_salonpan_comer.png", ubic), "rb")
+            , "Periferia Salón y Panadería"
+        )
+    
+    context.bot.send_photo(
+            chat_id[1]
+            , open(find("periferia_cafesandwich_comer.png", ubic), "rb")
+            , "Periferia Cafetería y Sandwiches"
+        )
+
+    context.bot.send_photo(
+            chat_id[1]
+            , open(find("periferico_lubri_comer.png", ubic), "rb")
+            , "Periferia Lubriplaya"
+        )
+    
+    try:
+        context.bot.send_photo(
+            chat_id[1]
+            , open(find("periferia_grill_comer.png", ubic), "rb")
+            , "Periferia Grill"
+        )
+    except:
+        context.bot.send_message(
+            chat_id=chat_id[1]
+            , text="Reporte Grill no generado. Ventas Grill aún no se \
+                registran a través de módulo Servicompra"
+        )
+
+
 
 ##################################################
-# WEEKLY REPORT
+# WEEKLY REPORT channel Rumaos_Info
 ##################################################
 
 def envio_reporte_semanal(context):
@@ -1136,15 +1245,7 @@ def envio_reporte_semanal(context):
             , text="Error al resetear Info vtaProyGranClient"
         )
         logger.error("Error al resetear vtaProyGranClient", exc_info=1)
-    
-    try:
-        perifericoSemanal()
-        logger.info("Info Periferico Semanal reseteado")
-    except Exception as e:
-        context.bot.send_message(id_Autorizados[0]
-            , text="Error al resetear Info Periferico Semanal"
-        )
-        logger.error("Error al resetear Periferico Semanal", exc_info=1)
+
 
 
     weekStart = (dt.date.today()-dt.timedelta(days=7)).strftime("%d/%m/%y")
@@ -1198,36 +1299,6 @@ def envio_reporte_semanal(context):
             , "Penetración RedMás Semanal"
         )
     
-    context.bot.send_photo(
-            chat_id
-            , open(find("periferia_salonpan.png", ubic), "rb")
-            , "Periferia Salón y Panadería"
-        )
-    
-    context.bot.send_photo(
-            chat_id
-            , open(find("periferia_cafesandwich.png", ubic), "rb")
-            , "Periferia Cafetería y Sandwiches"
-        )
-
-    context.bot.send_photo(
-            chat_id
-            , open(find("periferico_lubri.png", ubic), "rb")
-            , "Periferia Lubriplaya"
-        )
-    
-    try:
-        context.bot.send_photo(
-            chat_id
-            , open(find("periferia_grill.png", ubic), "rb")
-            , "Periferia Grill"
-        )
-    except:
-        context.bot.send_message(
-            chat_id=chat_id
-            , text="Reporte Grill no generado. Ventas Grill aún no se \
-                registran a través de módulo Servicompra"
-        )
 
 
 
@@ -1286,6 +1357,7 @@ def main() -> None:
     # updater.job_queue.run_repeating(callback_minute, interval=60, first=10)
     # updater.job_queue.run_once(envio_reporte_cheques, 15)
 
+    # Daily
     updater.job_queue.run_daily(envio_reporte_ivo
         , dt.time(11,0,0,tzinfo=argTime) 
         , name="info_diario"
@@ -1298,6 +1370,8 @@ def main() -> None:
         , dt.time(11,15,0,tzinfo=argTime) 
         , name="info_lapuchesky"
     )
+
+    # Monday to Friday
     updater.job_queue.run_daily(envio_reporte_cheques
         , dt.time(8,0,0,tzinfo=argTime)
         , days=(0, 1, 2, 3, 4)
@@ -1313,10 +1387,17 @@ def main() -> None:
         , days=(0, 1, 2, 3, 4)
         , name="info_CFO"
     )
+
+    # Weekly
     updater.job_queue.run_daily(envio_reporte_semanal
         , dt.time(12,0,0,tzinfo=argTime)
         , days=[4]
         , name="info_semanal"
+    )
+    updater.job_queue.run_daily(envio_reporte_periferia_semanal
+        , dt.time(13,0,0,tzinfo=argTime)
+        , days=[4]
+        , name="info_periferia_semanal"
     )
 
     # Keep Alive Task
