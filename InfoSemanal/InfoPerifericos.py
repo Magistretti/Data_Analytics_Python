@@ -463,7 +463,11 @@ def _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil):
         SELECT
             RTRIM(ut.UEN) as 'UEN'
             ,ut.Negocio
-            ,sum(ut.[Intermensual Ventas]) as 'Intermensual Ventas'
+            ,CASE
+                --Esta línea transforma panificados de unid a docenas
+                WHEN ut.Negocio = 'PANADERIA' THEN sum(ut.[Intermensual Ventas])/12
+                ELSE sum(ut.[Intermensual Ventas])
+                END as 'Intermensual Ventas'
             --,sum(ut.[Importe Total]) as 'Importe Total'
             --,sum(ut.[Costo Total]) as 'Costo Total'
             ,sum(ut.[Intermensual Margen]) as 'Intermensual Margen'
@@ -813,7 +817,11 @@ def _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil):
         Select
             act.UEN
             , act.Negocio
-            , act.[Intermensual Ventas]
+            ,CASE
+                --Esta línea transforma panificados de unid a docenas
+                WHEN act.Negocio = 'PANADERIA' THEN act.[Intermensual Ventas]/12
+                ELSE act.[Intermensual Ventas]
+                END as 'Intermensual Ventas'
             --, act.[Importe Total]
             --, act.[Costo Total]
             , act.[Intermensual Margen]
@@ -825,7 +833,11 @@ def _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil):
         select 
             ant.UEN
             , ant.Negocio
-            , ant.[Intermensual Ventas]
+            ,CASE
+                --Esta línea transforma panificados de unid a docenas
+                WHEN ant.Negocio = 'PANADERIA' THEN ant.[Intermensual Ventas]/12
+                ELSE ant.[Intermensual Ventas]
+                END as 'Intermensual Ventas'
             --, ant.[Importe Total]
             --, ant.[Costo Total]
             , ant.[Intermensual Margen]
@@ -1172,7 +1184,11 @@ def _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil):
         Select
             act.UEN
             , act.Negocio
-            , act.[Intermensual Ventas]
+            ,CASE
+                --Esta línea transforma panificados de unid a docenas
+                WHEN act.Negocio = 'PANADERIA' THEN act.[Intermensual Ventas]/12
+                ELSE act.[Intermensual Ventas]
+                END as 'Intermensual Ventas'
             --, act.[Importe Total]
             --, act.[Costo Total]
             , act.[Intermensual Margen]
@@ -1184,7 +1200,11 @@ def _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil):
         select 
             ant.UEN
             , ant.Negocio
-            , ant.[Intermensual Ventas]
+            ,CASE
+                --Esta línea transforma panificados de unid a docenas
+                WHEN ant.Negocio = 'PANADERIA' THEN ant.[Intermensual Ventas]/12
+                ELSE ant.[Intermensual Ventas]
+                END as 'Intermensual Ventas'
             --, ant.[Importe Total]
             --, ant.[Costo Total]
             , ant.[Intermensual Margen]
@@ -1540,7 +1560,11 @@ def _get_SCFull_weekly(conexCentral, conexAZMil, conexPIMil):
         SELECT
             RTRIM(ut.UEN) as 'UEN'
             ,ut.Negocio
-            ,sum(ut.[Cantidad Total]) as 'Ventas'
+            ,CASE
+                --Esta línea transforma panificados de unid a docenas
+                WHEN ut.Negocio = 'PANADERIA' THEN sum(ut.[Cantidad Total])/12
+                ELSE sum(ut.[Cantidad Total])
+                END as 'Ventas'
             --,sum(ut.[Importe Total]) as 'Importe Total'
             --,sum(ut.[Costo Total]) as 'Costo Total'
             --,sum(ut.[Margen Total]) as 'Margen Total'
@@ -1728,7 +1752,11 @@ def _get_SCFull_weekly(conexCentral, conexAZMil, conexPIMil):
         Select
             act.UEN
             , act.Negocio
-            , act.[Ventas]
+            ,CASE
+                --Esta línea transforma panificados de unid a docenas
+                WHEN act.Negocio = 'PANADERIA' THEN act.[Ventas]/12
+                ELSE act.[Ventas]
+                END as 'Ventas'
             --, act.[Importe Total]
             --, act.[Costo Total]
             --, act.[Margen Total]
@@ -1913,7 +1941,11 @@ def _get_SCFull_weekly(conexCentral, conexAZMil, conexPIMil):
         Select
             act.UEN
             , act.Negocio
-            , act.[Ventas]
+            ,CASE
+                --Esta línea transforma panificados de unid a docenas
+                WHEN act.Negocio = 'PANADERIA' THEN act.[Ventas]/12
+                ELSE act.[Ventas]
+                END as 'Ventas'
             --, act.[Importe Total]
             --, act.[Costo Total]
             --, act.[Margen Total]
@@ -2217,7 +2249,18 @@ def perifericoSemanal():
 
 
 
-    # Styling of DFs
+    ###############################
+    # DFs for non-managers
+    ###############################
+    df_salon_comerc = df_salon.drop("Intermensual Margen", level=0, axis=1)
+    df_pan_comerc = df_pan.drop("Intermensual Margen", level=0, axis=1)
+    df_cafe_comerc = df_cafe.drop("Intermensual Margen", level=0, axis=1)
+    df_sandwich_comerc = df_sandwich.drop("Intermensual Margen", level=0, axis=1)
+    df_lubri_comerc = df_lubri.drop("Intermensual Margen", level=0, axis=1)
+
+
+
+    # Styling of DFs for CFO
     df_salon_estilo = _estiladorVtaTitulo(
         df_salon
         , list_Col_Num=["Ventas","Intermensual Ventas"]
@@ -2270,16 +2313,72 @@ def perifericoSemanal():
     )
 
 
+    # Styling of DFs for non-managers
+    df_salon_com_estilo = _estiladorVtaTitulo(
+        df_salon_comerc
+        , list_Col_Num=["Ventas","Intermensual Ventas"]
+        , list_Col_Din=[]
+        , list_Col_Perc=[
+            ("Intermensual Ventas", "Var %")
+        ]
+        , titulo="SALÓN"
+    )
+    df_pan_com_estilo = _estiladorVtaTitulo(
+        df_pan_comerc
+        , list_Col_Num=["Ventas","Intermensual Ventas"]
+        , list_Col_Din=[]
+        , list_Col_Perc=[
+            ("Intermensual Ventas", "Var %")
+        ]
+        , titulo="PANADERÍA"
+    )
+    df_cafe_com_estilo = _estiladorVtaTitulo(
+        df_cafe_comerc
+        , list_Col_Num=["Ventas","Intermensual Ventas"]
+        , list_Col_Din=[]
+        , list_Col_Perc=[
+            ("Intermensual Ventas", "Var %")
+        ]
+        , titulo="CAFETERIA"
+    )
+    df_sandwich_com_estilo = _estiladorVtaTitulo(
+        df_sandwich_comerc
+        , list_Col_Num=["Ventas","Intermensual Ventas"]
+        , list_Col_Din=[]
+        , list_Col_Perc=[
+            ("Intermensual Ventas", "Var %")
+        ]
+        , titulo="SANDWICHES"
+    )
+    df_lubri_com_estilo = _estiladorVtaTitulo(
+        df_lubri_comerc
+        , list_Col_Num=["Ventas","Intermensual Ventas"]
+        , list_Col_Din=[]
+        , list_Col_Perc=[
+            ("Intermensual Ventas", "Var %")
+        ]
+        , titulo="LUBRIPLAYA"
+    )
+
+
 
     # Files location
     ubicacion = str(pathlib.Path(__file__).parent)+"\\"
 
-    # # Printing Images
+    # Printing Images
+    # CFO report images
     _df_to_image(df_salon_estilo, ubicacion, "periferico_salon.png")
     _df_to_image(df_pan_estilo, ubicacion, "periferico_pan.png")
     _df_to_image(df_cafe_estilo, ubicacion, "periferico_cafe.png")
     _df_to_image(df_sandwich_estilo, ubicacion, "periferico_sandwich.png")
     _df_to_image(df_lubri_estilo, ubicacion, "periferico_lubri.png")
+
+    # Non-managers report images
+    _df_to_image(df_salon_com_estilo, ubicacion, "periferico_salon_comer.png")
+    _df_to_image(df_pan_com_estilo, ubicacion, "periferico_pan_comer.png")
+    _df_to_image(df_cafe_com_estilo, ubicacion, "periferico_cafe_comer.png")
+    _df_to_image(df_sandwich_com_estilo, ubicacion, "periferico_sandwich_comer.png")
+    _df_to_image(df_lubri_com_estilo, ubicacion, "periferico_lubri_comer.png")
     
 
 
@@ -2303,7 +2402,9 @@ def perifericoSemanal():
             / abs(df_grill[("Intermensual Margen","Anterior")])
         )
 
-        df_lubri.sort_index(axis=1, ascending=[False,True], inplace=True)
+        df_grill.sort_index(axis=1, ascending=[False,True], inplace=True)
+
+        df_grill_comerc = df_grill.drop("Intermensual Margen", level=0, axis=1)
 
         df_grill_estilo = _estiladorVtaTitulo(
             df_grill
@@ -2316,7 +2417,18 @@ def perifericoSemanal():
             , titulo="GRILL"
         )
 
+        df_grill_com_estilo = _estiladorVtaTitulo(
+            df_grill_comerc
+            , list_Col_Num=["Intermensual Ventas"]
+            , list_Col_Din=[]
+            , list_Col_Perc=[
+                ("Intermensual Ventas", "Var %")
+            ]
+            , titulo="GRILL"
+        )
+
         _df_to_image(df_grill_estilo, ubicacion, "periferico_grill.png")
+        _df_to_image(df_grill_com_estilo, ubicacion, "periferico_grill_comer.png")
 
     except:
         logger.info("NO DATA IN 'SC AGRUP GRILL'")
@@ -2336,6 +2448,16 @@ def perifericoSemanal():
         , ubicacion + "periferico_sandwich.png"
     ]
 
+    listaImg3 = [
+        ubicacion + "periferico_salon_comer.png"
+        , ubicacion + "periferico_pan_comer.png"
+    ]
+
+    listaImg4 = [
+        ubicacion + "periferico_cafe_comer.png"
+        , ubicacion + "periferico_sandwich_comer.png"
+    ]
+
 
     fusionImg = _append_images(listaImg1, direction="vertical")
     fusionImg.save(ubicacion + "periferia_salonpan.png")
@@ -2343,6 +2465,11 @@ def perifericoSemanal():
     fusionImg2 = _append_images(listaImg2, direction="vertical")
     fusionImg2.save(ubicacion + "periferia_cafesandwich.png")
 
+    fusionImg3 = _append_images(listaImg3, direction="vertical")
+    fusionImg3.save(ubicacion + "periferia_salonpan_comer.png")
+
+    fusionImg4 = _append_images(listaImg4, direction="vertical")
+    fusionImg4.save(ubicacion + "periferia_cafesandwich_comer.png")
 
 
     # Timer
