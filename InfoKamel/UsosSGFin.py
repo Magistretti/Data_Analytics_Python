@@ -65,6 +65,7 @@ def _get_df(conexSGFin):
             AND egr.IdProveedor <> 343 -- Filtrar Mov Cheq de 3ros
             AND egr.IdProveedor <> 9840 -- Filtrar Transf de Dólares
             AND egr.Importe > 0
+			AND ref.IdPlanDepartamento <> 46 -- Filtrar Depto Operaciones en Efectivo
 
         GROUP BY Nombre
 
@@ -91,6 +92,7 @@ def _get_df(conexSGFin):
             AND ban.IdReferencia <> 106 -- Filtrar Transferencias
             AND ban.IdReferencia <> 41 -- Filtrar Combustible a Granel
             --AND ban.IdReferencia <> 108 -- Filtrar Depositos Bancos
+			AND ref.IdPlanDepartamento <> 46 -- Filtrar Depto Operaciones en Efectivo
 
         GROUP BY prov.Nombre
         )
