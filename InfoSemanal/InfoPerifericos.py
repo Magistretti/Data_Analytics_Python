@@ -16,7 +16,7 @@ import pandas as pd
 import dataframe_image as dfi
 from PIL import Image
 
-from DatosLogin import login, loginAZMilenium, loginPIMilenium
+from DatosLogin import login, loginAZMilenium, loginPIMilenium, loginPIDeposito
 from Conectores import conectorMSSQL
 
 import logging
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
     # SC and FULL monthly 
     ##########################################################
 
-def _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil):
+def _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil, conexPIDep):
     """
     df of general store sales of previous month and forecasting of actual month
     """
@@ -1216,6 +1216,226 @@ def _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil):
         , conexPIMil
     )
 
+
+    ####################################################
+
+
+    df_depoPI = pd.read_sql(
+        """
+        /* Esto evita el mensaje de confirmación después de cada
+            ejecución permitiendo a pandas generar el df */
+        SET NOCOUNT ON 
+
+        /* Variables Fecha Dinámicas*/
+        DECLARE @ayer date
+        set @ayer = GETDATE()-1
+        DECLARE @semanaAtras date
+        set @semanaAtras = GETDATE()-8
+        DECLARE @dosSemanasAtras date
+        set @dosSemanasAtras = GETDATE()-15
+
+        DECLARE @finMesActual date
+        set @finMesActual = EOMONTH(GETDATE(),0)
+
+        DECLARE @multiplicadorProyeccion decimal(18,5)
+        /* Recordar que la división de números enteros genera enteros, por lo que
+            es necesario convertir los enteros en decimales */
+        set @multiplicadorProyeccion = (DAY(@finMesActual)+0.0)/(DAY(@ayer)+0.0)
+
+        DECLARE @finMesAnterior date
+        set @finMesAnterior = EOMONTH(GETDATE(),-1)
+
+        DECLARE @inicioMesAnterior date
+        set @inicioMesAnterior = DATEADD(DAY,1,EOMONTH(GETDATE(),-2));
+
+
+
+        /*Tabla temporal de costos con el objetivo de incluir un indice agrupado
+        para acelerar JOINs*/
+        if OBJECT_ID('tempdb..#costos') is not null
+                DROP TABLE #costos
+
+        SELECT [CODIGO]
+            ,[FECHASQL]
+            ,[CBrutPromPond]
+        INTO #costos
+        FROM [dbo].[View_Aprox_CostoHistPromPond] WITH (NOLOCK)
+
+        create clustered index CI_CostoHist_Cod_Fecha
+            ON #costos (CODIGO ASC, FECHASQL Asc);
+
+
+        /*Tabla temporal de descripciones de productos con el objetivo de incluir un 
+        indice agrupado para acelerar JOINs*/
+        if OBJECT_ID('tempdb..#productos') is not null
+                DROP TABLE #productos
+
+        SELECT [CODIGO]
+            ,[AGRUPACION]
+            ,[ENVASE]
+        INTO #productos
+        FROM [dbo].SCProduc WITH (NOLOCK)
+
+        create clustered index CI_Productos_Cod
+            ON #productos (CODIGO ASC);
+
+
+        /*CTE*/
+        with SCEgreso_ConCosto as (
+            SELECT
+                SCE.FECHASQL
+                ,RTRIM(SCE.CODIGO) as 'CODIGO'
+                ,sum(SCE.CANTIDAD) as 'Sum of Cantidad'
+                ,sum(SCE.IMPORTE) as 'Sum of Importe'
+                --,sum(SCE.IMPORTE) / sum(SCE.CANTIDAD) as 'PUnit Prom'
+                ,isnull(
+                    isnull(
+                        max(c.CBrutPromPond)
+                        ,(select max(cbrutprompond) as 'cbpp'
+                            from #costos as c WITH (NOLOCK)
+                            where c.codigo = sce.codigo
+                                and c.FECHASQL <= sce.FECHASQL
+                            group by c.codigo)
+                    )
+                    ,(select
+                        max((p.PRECOSTO-p.IMPINT)*1.21 + p.IMPINT) as 'cbpp'
+                        from dbo.SCProduc as p WITH (NOLOCK)
+                        where p.CODIGO = sce.CODIGO
+                        group by p.CODIGO
+                    )
+                ) as 'CBrutPromPond'
+
+            FROM SCEgreso as SCE WITH (NOLOCK)
+            Left outer join #costos as c
+                on sce.FECHASQL = c.FECHASQL
+                    and sce.CODIGO = c.CODIGO
+            
+            GROUP BY SCE.FECHASQL, SCE.CODIGO
+        )
+        , SCEgreso_Margen as (
+            SELECT
+                SCEC.FECHASQL
+                ,SCEC.CODIGO
+                ,p.AGRUPACION
+                ,SCEC.[Sum of Cantidad] * p.ENVASE as 'Sum of Cantidad'
+                --,SCEC.[PUnit Prom]
+                ,SCEC.[Sum of Importe]
+                --,SCEC.CBrutPromPond
+                ,SCEC.CBrutPromPond * SCEC.[Sum of Cantidad] as 'Sum of Costo'
+                --,SCEC.[PUnit Prom] - SCEC.CBrutPromPond as 'PUnit Margen'
+                ,SCEC.[Sum of Importe] - (SCEC.CBrutPromPond*SCEC.[Sum of Cantidad]) as 'Margen'
+
+            FROM SCEgreso_ConCosto as SCEC
+            INNER JOIN #productos as p
+                ON p.CODIGO = SCEC.CODIGO
+        )
+
+        , mesActualSC as ( -- Mes Actual PROYECTADO
+            SELECT
+                filtro.Negocio
+                --,cte.AGRUPACION
+                ,CAST(ROUND(
+                    sum(cte.[Sum of Cantidad])*@multiplicadorProyeccion
+                    , 0
+                ) as int) as 'Intermensual Ventas'
+                --,sum(cte.[Sum of Importe]) as 'Importe Total'
+                --,sum(cte.[Sum of Costo]) as 'Costo Total'
+                ,CAST(ROUND(
+                    sum(cte.Margen)*@multiplicadorProyeccion
+                    , 0
+                ) as int) as 'Intermensual Margen'
+                ,'Proyectado' as 'Orden'
+            FROM SCEgreso_Margen as cte
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN cte.CODIGO = 'MINI04' THEN 'Regalos' --hasta que se revise con Eduardo
+                    WHEN cte.AGRUPACION IN ('COCINA', 'COCINA PROMOS') THEN 'SANDWICHES'
+                    WHEN cte.AGRUPACION IN ('PANIFICADOS', 'PANIFICADOS PROMOS') THEN 'PANADERIA'
+                    WHEN cte.AGRUPACION IN ('VENDING', 'VENDING PROMOS') THEN 'CAFETERIA'
+                    WHEN cte.AGRUPACION = 'GRILL' THEN 'GRILL'
+                    WHEN cte.AGRUPACION IN ('ACCESORIOS AUTOMOTOR', 'FILTROS', 'PRODUCTOS LUBRI') THEN 'LUBRIPLAYA'
+                    WHEN cte.AGRUPACION IN ('VENDING2','REGALOS O CORTESIAS','REDMAS','RED PAGO') THEN 'Regalos'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            where cte.FECHASQL > @finMesAnterior 
+                and cte.FECHASQL <= @ayer
+                and Negocio <> 'Regalos'
+            group by Negocio
+            order by Negocio OFFSET 0 ROWS
+        )
+
+        , mesAnteriorSC as ( 
+            SELECT
+                filtro.Negocio
+                --,cte.AGRUPACION
+                ,sum(cte.[Sum of Cantidad]) as 'Intermensual Ventas'
+                --,sum(cte.[Sum of Importe]) as 'Importe Total'
+                --,sum(cte.[Sum of Costo]) as 'Costo Total'
+                ,sum(cte.Margen) as 'Intermensual Margen'
+                ,'Anterior' as 'Orden'
+            FROM SCEgreso_Margen as cte
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN cte.CODIGO = 'MINI04' THEN 'Regalos' --hasta que se revise con Eduardo
+                    WHEN cte.AGRUPACION IN ('COCINA', 'COCINA PROMOS') THEN 'SANDWICHES'
+                    WHEN cte.AGRUPACION IN ('PANIFICADOS', 'PANIFICADOS PROMOS') THEN 'PANADERIA'
+                    WHEN cte.AGRUPACION IN ('VENDING', 'VENDING PROMOS') THEN 'CAFETERIA'
+                    WHEN cte.AGRUPACION = 'GRILL' THEN 'GRILL'
+                    WHEN cte.AGRUPACION IN ('ACCESORIOS AUTOMOTOR', 'FILTROS', 'PRODUCTOS LUBRI') THEN 'LUBRIPLAYA'
+                    WHEN cte.AGRUPACION IN ('VENDING2','REGALOS O CORTESIAS','REDMAS','RED PAGO') THEN 'Regalos'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            where cte.FECHASQL >= @inicioMesAnterior
+                and cte.FECHASQL <= @finMesAnterior
+                and Negocio <> 'Regalos'
+            group by Negocio
+            order by Negocio OFFSET 0 ROWS
+        )
+
+
+        , uniontable AS(
+            SELECT *
+            FROM mesActualSC
+
+            UNION ALL
+
+            SELECT *
+            FROM mesAnteriorSC
+
+        )
+
+        SELECT
+            'PERDRIEL' as 'UEN'
+            ,ut.Negocio
+            ,CASE
+                --Esta línea transforma panificados de unid a docenas
+                WHEN ut.Negocio = 'PANADERIA' THEN sum(ut.[Intermensual Ventas])/12
+                ELSE sum(ut.[Intermensual Ventas])
+                END as 'Intermensual Ventas'
+            --,sum(ut.[Importe Total]) as 'Importe Total'
+            --,sum(ut.[Costo Total]) as 'Costo Total'
+            ,sum(ut.[Intermensual Margen]) as 'Intermensual Margen'
+            ,ut.Orden
+
+        FROM uniontable as ut
+
+        GROUP BY ut.Negocio, ut.Orden
+
+        ORDER BY Orden, Negocio
+        """
+        , conexPIDep
+    )
+
     # print(df_SC, df_fullAZ, df_fullPI)
 
 
@@ -1224,7 +1444,7 @@ def _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil):
     ##########################################################
 
     # Concat, group by UEN (sum) and sort by UEN
-    df_SCFull_monthly = pd.concat([df_SC, df_fullAZ, df_fullPI])
+    df_SCFull_monthly = pd.concat([df_SC, df_fullAZ, df_fullPI, df_depoPI])
     df_SCFull_monthly = df_SCFull_monthly.groupby(
         ["UEN","Negocio","Orden"]
         , as_index=False
@@ -1259,7 +1479,7 @@ def _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil):
     # SC and FULL weekly
     ##########################################################
 
-def _get_SCFull_weekly(conexCentral, conexAZMil, conexPIMil):
+def _get_SCFull_weekly(conexCentral, conexAZMil, conexPIMil, conexPIDep):
     """
     df of general store sales of previous week and actual week
     """
@@ -1957,12 +2177,173 @@ def _get_SCFull_weekly(conexCentral, conexAZMil, conexPIMil):
         , conexPIMil
     )
 
+    
+    ####################################################
+
+
+    df_depoPI = pd.read_sql(
+        """
+        /* Esto evita el mensaje de confirmación después de cada
+            ejecución permitiendo a pandas generar el df */
+        SET NOCOUNT ON 
+
+        /* Variables Fecha Dinámicas*/
+        DECLARE @ayer date
+        set @ayer = GETDATE()-1
+        DECLARE @semanaAtras date
+        set @semanaAtras = GETDATE()-8
+        DECLARE @dosSemanasAtras date
+        set @dosSemanasAtras = GETDATE()-15;
+
+
+        /*Tabla temporal de costos con el objetivo de incluir un indice agrupado
+        para acelerar JOINs*/
+        if OBJECT_ID('tempdb..#costos') is not null
+                DROP TABLE #costos
+
+        SELECT [CODIGO]
+            ,[FECHASQL]
+            ,[CBrutPromPond]
+        INTO #costos
+        FROM [dbo].[View_Aprox_CostoHistPromPond] WITH (NOLOCK)
+
+        create clustered index CI_CostoHist_Cod_Fecha
+            ON #costos (CODIGO ASC, FECHASQL Asc);
+
+
+        /*Tabla temporal de descripciones de productos con el objetivo de incluir un 
+        indice agrupado para acelerar JOINs*/
+        if OBJECT_ID('tempdb..#productos') is not null
+                DROP TABLE #productos
+
+        SELECT [CODIGO]
+            ,[AGRUPACION]
+            ,[ENVASE]
+        INTO #productos
+        FROM [dbo].SCProduc WITH (NOLOCK)
+
+        create clustered index CI_Productos_Cod
+            ON #productos (CODIGO ASC);
+
+
+        /*CTE*/
+        with SCEgreso_ConCosto as (
+            SELECT
+                SCE.FECHASQL
+                ,RTRIM(SCE.CODIGO) as 'CODIGO'
+                ,sum(SCE.CANTIDAD) as 'Sum of Cantidad'
+                ,sum(SCE.IMPORTE) as 'Sum of Importe'
+                --,sum(SCE.IMPORTE) / sum(SCE.CANTIDAD) as 'PUnit Prom'
+                ,isnull(
+                    isnull(
+                        max(c.CBrutPromPond)
+                        ,(select max(cbrutprompond) as 'cbpp'
+                            from #costos as c WITH (NOLOCK)
+                            where c.codigo = sce.codigo
+                                and c.FECHASQL <= sce.FECHASQL
+                            group by c.codigo)
+                    )
+                    ,(select
+                        max((p.PRECOSTO-p.IMPINT)*1.21 + p.IMPINT) as 'cbpp'
+                        from dbo.SCProduc as p WITH (NOLOCK)
+                        where p.CODIGO = sce.CODIGO
+                        group by p.CODIGO
+                    )
+                ) as 'CBrutPromPond'
+
+            FROM SCEgreso as SCE WITH (NOLOCK)
+            Left outer join #costos as c
+                on sce.FECHASQL = c.FECHASQL
+                    and sce.CODIGO = c.CODIGO
+
+            GROUP BY SCE.FECHASQL, SCE.CODIGO
+        )
+        , SCEgreso_Margen as (
+        select
+            SCEC.FECHASQL
+            ,SCEC.CODIGO
+            ,p.AGRUPACION
+            ,SCEC.[Sum of Cantidad] * p.ENVASE as 'Sum of Cantidad'
+            --,SCEC.[PUnit Prom]
+            ,SCEC.[Sum of Importe]
+            --,SCEC.CBrutPromPond
+            ,SCEC.CBrutPromPond * SCEC.[Sum of Cantidad] as 'Sum of Costo'
+            --,SCEC.[PUnit Prom] - SCEC.CBrutPromPond as 'PUnit Margen'
+            ,SCEC.[Sum of Importe] - (SCEC.CBrutPromPond*SCEC.[Sum of Cantidad]) as 'Margen'
+
+        from SCEgreso_ConCosto as SCEC
+        INNER JOIN #productos as p
+            on p.CODIGO = SCEC.CODIGO
+        )
+
+        , actualSC as ( --semana actual
+            SELECT
+                filtro.Negocio
+                --,cte.AGRUPACION
+                ,sum(cte.[Sum of Cantidad]) as 'Cantidad Total'
+                --,sum(cte.[Sum of Importe]) as 'Importe Total'
+                --,sum(cte.[Sum of Costo]) as 'Costo Total'
+                --,sum(cte.Margen) as 'Margen Total'
+                ,'Semanal' as 'Orden'
+            FROM SCEgreso_Margen as cte
+
+            OUTER APPLY
+
+            (SELECT
+                CASE
+                    WHEN cte.CODIGO = 'MINI04' THEN 'Regalos' --hasta que se revise con Eduardo
+                    WHEN cte.AGRUPACION IN ('COCINA', 'COCINA PROMOS') THEN 'SANDWICHES'
+                    WHEN cte.AGRUPACION IN ('PANIFICADOS', 'PANIFICADOS PROMOS') THEN 'PANADERIA'
+                    WHEN cte.AGRUPACION IN ('VENDING', 'VENDING PROMOS') THEN 'CAFETERIA'
+                    WHEN cte.AGRUPACION = 'GRILL' THEN 'GRILL'
+                    WHEN cte.AGRUPACION IN ('ACCESORIOS AUTOMOTOR', 'FILTROS', 'PRODUCTOS LUBRI') THEN 'LUBRIPLAYA'
+                    WHEN cte.AGRUPACION IN ('VENDING2','REGALOS O CORTESIAS','REDMAS','RED PAGO') THEN 'Regalos'
+                    ELSE 'SALON'
+                end as Negocio
+            ) as filtro
+
+            where cte.FECHASQL > @semanaAtras 
+                and cte.FECHASQL <= @ayer
+                and Negocio <> 'Regalos'
+            group by Negocio
+            order by Negocio OFFSET 0 ROWS
+        )
+
+
+        , uniontable AS(
+            SELECT *
+            FROM actualSC
+
+        )
+
+        SELECT
+            'PERDRIEL' as 'UEN'
+            ,ut.Negocio
+            ,CASE
+                --Esta línea transforma panificados de unid a docenas
+                WHEN ut.Negocio = 'PANADERIA' THEN sum(ut.[Cantidad Total])/12
+                ELSE sum(ut.[Cantidad Total])
+                END as 'Ventas'
+            --,sum(ut.[Importe Total]) as 'Importe Total'
+            --,sum(ut.[Costo Total]) as 'Costo Total'
+            --,sum(ut.[Margen Total]) as 'Margen Total'
+            ,ut.Orden
+
+        FROM uniontable as ut
+
+        GROUP BY ut.Negocio, ut.Orden
+
+        ORDER BY Orden, Negocio
+        """
+        , conexPIDep
+    )
+
     ##########################################################
     # Adding "FULL" data to "SGES" data
     ##########################################################
 
     # Concat, group by UEN (sum) and sort by UEN
-    df_SCFull_weekly = pd.concat([df_SC, df_fullAZ, df_fullPI])
+    df_SCFull_weekly = pd.concat([df_SC, df_fullAZ, df_fullPI, df_depoPI])
     df_SCFull_weekly = df_SCFull_weekly.groupby(
         ["UEN","Negocio","Orden"]
         , as_index=False
@@ -2144,10 +2525,11 @@ def perifericoSemanal():
     conexCentral = conectorMSSQL(login)
     conexAZMil = conectorMSSQL(loginAZMilenium)
     conexPIMil = conectorMSSQL(loginPIMilenium)
+    conexPIDep = conectorMSSQL(loginPIDeposito)
 
     # Getting DFs
-    df_month = _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil)
-    df_week = _get_SCFull_weekly(conexCentral, conexAZMil, conexPIMil)
+    df_month = _get_SCFull_monthly(conexCentral, conexAZMil, conexPIMil, conexPIDep)
+    df_week = _get_SCFull_weekly(conexCentral, conexAZMil, conexPIMil, conexPIDep)
 
     # Pivot DF to create a multiindex
     df_pivot_m = df_month.pivot(index=["Negocio", "UEN"], columns=["Orden"])
@@ -2387,6 +2769,7 @@ def perifericoSemanal():
     # updated
 
     try:
+        # GRILL for CFO
         df_grill = df_pivot_join.loc["GRILL"]
 
         df_grill.loc["TOTAL"] = df_grill.sum(numeric_only=True)
@@ -2404,11 +2787,13 @@ def perifericoSemanal():
 
         df_grill.sort_index(axis=1, ascending=[False,True], inplace=True)
 
+        # GRILL for non-managers
         df_grill_comerc = df_grill.drop("Intermensual Margen", level=0, axis=1)
 
+        
         df_grill_estilo = _estiladorVtaTitulo(
             df_grill
-            , list_Col_Num=["Intermensual Ventas"]
+            , list_Col_Num=["Ventas","Intermensual Ventas"]
             , list_Col_Din=["Intermensual Margen"]
             , list_Col_Perc=[
                 ("Intermensual Ventas", "Var %")
@@ -2419,7 +2804,7 @@ def perifericoSemanal():
 
         df_grill_com_estilo = _estiladorVtaTitulo(
             df_grill_comerc
-            , list_Col_Num=["Intermensual Ventas"]
+            , list_Col_Num=["Ventas","Intermensual Ventas"]
             , list_Col_Din=[]
             , list_Col_Perc=[
                 ("Intermensual Ventas", "Var %")
