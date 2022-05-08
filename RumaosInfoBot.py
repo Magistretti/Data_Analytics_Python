@@ -1157,7 +1157,7 @@ def envio_reporte_periferia_semanal(context):
     try:
         context.bot.send_photo(
             chat_id[0]
-            , open(find("periferia_grill.png", ubic), "rb")
+            , open(find("periferico_grill.png", ubic), "rb")
             , "Periferia Grill"
         )
     except:
@@ -1190,7 +1190,7 @@ def envio_reporte_periferia_semanal(context):
     try:
         context.bot.send_photo(
             chat_id[1]
-            , open(find("periferia_grill_comer.png", ubic), "rb")
+            , open(find("periferico_grill_comer.png", ubic), "rb")
             , "Periferia Grill"
         )
     except:
