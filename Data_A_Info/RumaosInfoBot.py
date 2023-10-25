@@ -94,10 +94,10 @@ def find(name, path, type="file"):
 ######//////////////######
 # Where to find the report image files of:
 # "Info_Morosos.png", "Info_VolumenVentas.png", etc
-filePath_InfoVtaComb = find("InfoVtaCombustibles", ubic, "dir") + "\\"
-filePath_InfoGrandesDeudas = find("InfoDeuda", ubic, "dir") + "\\"
+filePath_InfoVtaComb = find("Info_Vta_Combustibles", ubic, "dir") + "\\"
+filePath_InfoGrandesDeudas = find("Info_Deuda", ubic, "dir") + "\\"
 filePath_Info_Despachos_Camioneros = \
-    find("DespachosCamionerosRedmas", ubic, "dir") + "\\"
+    find("Despachos_CamionerosRedmas", ubic, "dir") + "\\"
 filePath_Info_Presu_Gas = find("PRESUPUESTO",ubic, "dir") + "\\"
 filePath_Info_Pen_Pan= find("PenetracionPanaderia",ubic,"dir")+ "\\"
 filePath_Info_Pen_Lubri= find("Penetracion Lubricantes",ubic,"dir")+ "\\"
@@ -105,14 +105,14 @@ filePath_Info_Pen_Salon= find("Penetracion Salon",ubic,"dir")+ "\\"
 filePath_Info_Control_Info= find("Control",ubic,"dir")+ "\\"
 filePath_Info_Margenes = find("MARGEN", ubic, "dir")+ "\\"
 filePath_Info_MargenesGasoleos = find("Margen_Playa", ubic, "dir")+ "\\"
-filePath_Info_Descargas = find("Informe descargas y volumenes", ubic, "dir")+ "\\"
+filePath_Info_Descargas = find("Informe_descargas_y_volumenes", ubic, "dir")+ "\\"
 filePath_Info_RH = find("RH", ubic, "dir")+ "\\"
 filePath_Pen_APP_YPF = find("PenetracionAppYPF", ubic, "dir")+ "\\"
 filePath_Pen_RED_PAGO = find("Red Pago", ubic, "dir")+ "\\"
-filePath_KAMEL = find("InfoKamel", ubic, "dir")+ "\\"
+filePath_KAMEL = find("Info_Finanzas", ubic, "dir")+ "\\"
 filePath_YPF = find("MasYPF", ubic, "dir")+ "\\"
-filePath_RedMas = find("InfoLubri_y_RedMas", ubic, "dir")+ "\\"
-filePath_InfoSemanal = find("InfoSemanal", ubic, "dir")+ "\\"
+filePath_RedMas = find("Info_Lubri_y_RedMas", ubic, "dir")+ "\\"
+filePath_InfoSemanal = find("Info_Semanal", ubic, "dir")+ "\\"
 filePath_Eduardo = find("DB_Eduardo", ubic, "dir")+ "\\"
 filePath_SHEET =  find("DB_Sheet", ubic, "dir")+ "\\"
 
